@@ -1,0 +1,58 @@
+{
+    "name": "@prifilabs/zk-team-js",
+    "version": "0.0.1",
+    "description": "Privacy-Preserving Account-Abstraction for Teams",
+    "main": "lib/src/index.js",
+    "scripts": {
+        "build": "npx tsc",
+        "test": "npx hardhat test",
+        "coverage": "nyc ts-mocha test/index.spec.ts && npx hardhat coverage",
+        "prepare": "husky install"
+    },
+    "repository": {
+        "type": "git",
+        "url": "git+https://github.com/prifilabs/zk-team-js.git"
+    },
+    "author": "Thierry Sans",
+    "license": "MIT",
+    "bugs": {
+        "url": "https://github.com/prifilabs/zk-team-js/issues"
+    },
+    "homepage": "https://github.com/prifilabs/zk-team-js#readme",
+    "devDependencies": {
+        "@nomiclabs/hardhat-ethers": "^2.2.3",
+        "@nomiclabs/hardhat-etherscan": "^3.1.7",
+        "@nomiclabs/hardhat-waffle": "^2.0.6",
+        "@typechain/ethers-v5": "^7.2.0",
+        "@typechain/hardhat": "^2.3.1",
+        "@typescript-eslint/eslint-plugin": "^4.33.0",
+        "@typescript-eslint/parser": "^4.33.0",
+        "dotenv": "^16.1.4",
+        "eslint": "^7.32.0",
+        "eslint-config-prettier": "^8.8.0",
+        "eslint-config-standard": "^16.0.3",
+        "eslint-plugin-import": "^2.27.5",
+        "eslint-plugin-node": "^11.1.0",
+        "eslint-plugin-prettier": "^3.4.1",
+        "eslint-plugin-promise": "^5.2.0",
+        "ethereum-waffle": "^3.4.4",
+        "ethers": "^5.7.2",
+        "hardhat": "^2.15.0",
+        "hardhat-gas-reporter": "^1.0.9",
+        "husky": "^8.0.3",
+        "lint-staged": "^13.2.3",
+        "prettier": "^2.8.8",
+        "solidity-coverage": "^0.7.22",
+        "ts-node": "^10.9.1",
+        "typechain": "^5.2.0",
+        "typescript": "^4.9.5"
+    },
+    "dependencies": {
+        "@account-abstraction/contracts": "^0.6.0",
+        "@account-abstraction/sdk": "^0.6.0",
+        "ethers": "^5.7.2"
+    },
+    "lint-staged": {
+        "*.{js,css,md,ts,sol}": "prettier --write"
+    }
+}
