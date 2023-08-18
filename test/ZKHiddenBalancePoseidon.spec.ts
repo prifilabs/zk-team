@@ -75,7 +75,7 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         const { proof, publicSignals } = await groth16.fullProve(
             testInputs,
             "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
-            "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_0000.zkey",
+            "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_0001.zkey",
         );
         
         const proofCalldata = await groth16.exportSolidityCallData(proof, publicSignals);
