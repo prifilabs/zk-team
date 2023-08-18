@@ -104,15 +104,14 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         const testInputs = {
             secret: "1111",
             address: spender.address,
-            balance: ethers.utils.parseEther("10"),
-            newBalance: ethers.utils.parseEther("2.5"),
-            value: ethers.utils.parseEther("17.5"),
+            balance: ethers.utils.parseEther("10").toBigInt(),
+            newBalance: ethers.utils.parseEther("2.5").toBigInt(),
+            value: ethers.utils.parseEther("17.5").toBigInt(),
             nonce: 1,
         };
 
         try {
             await zkHiddenBalancePoseidonCircuit.calculateWitness(testInputs);
-            console.log("hi");
             assert(false);
         } catch (e) {
             assert(e.message.includes("Assert Failed"));
@@ -145,34 +144,28 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         const testInputs = {
             secret: "1111",
             address: spender.address,
-            balance: ethers.utils.parseEther("10"),
-            newBalance: ethers.utils.parseEther("2.5"),
-            value: ethers.utils.parseEther("7.5"),
+            balance: ethers.utils.parseEther("10").toBigInt(),
+            newBalance: ethers.utils.parseEther("2.5").toBigInt(),
+            value: ethers.utils.parseEther("7.5").toBigInt(),
             nonce: 1,
         };
-        let poseidonHashJsSecretUserAddressResult = poseidonHasher.F.toString(
-        poseidonHasher([
-        testInputs.address,
-        testInputs.secret,
-        testInputs.nonce,
-        ]),
-        );
+        let poseidonHashJsSecretUserAddressResult = poseidonHasher.F.toString(poseidonHasher([
+            testInputs.address,
+            testInputs.secret,
+            testInputs.nonce,
+        ]));
 
-        let poseidonHashJsSecretBalanceResult = poseidonHasher.F.toString(
-        poseidonHasher([
-        testInputs.balance,
-        testInputs.secret,
-        testInputs.nonce,
-        ]),
-        );
+        let poseidonHashJsSecretBalanceResult = poseidonHasher.F.toString(poseidonHasher([
+            testInputs.balance,
+            testInputs.secret,
+            testInputs.nonce,
+        ]));
 
-        let poseidonHashJsNewSecretBalanceResult = poseidonHasher.F.toString(
-        poseidonHasher([
-        testInputs.newBalance,
-        testInputs.secret,
-        testInputs.nonce,
-        ]),
-        );
+        let poseidonHashJsNewSecretBalanceResult = poseidonHasher.F.toString(poseidonHasher([
+            testInputs.newBalance,
+            testInputs.secret,
+            testInputs.nonce,
+        ]));
 
         const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness({
             ...testInputs,
@@ -182,9 +175,9 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         try {
             await zkHiddenBalancePoseidonCircuit.assertOut(witness, {
                 out: [
-                poseidonHashJsSecretUserAddressResult,
-                poseidonHashJsSecretBalanceResult,
-                poseidonHashJsNewSecretBalanceResult,
+                    poseidonHashJsSecretUserAddressResult,
+                    poseidonHashJsSecretBalanceResult,
+                    poseidonHashJsNewSecretBalanceResult,
                 ],
             });
             assert(false);
