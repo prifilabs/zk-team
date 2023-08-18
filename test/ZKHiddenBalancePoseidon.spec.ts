@@ -38,9 +38,9 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         const testInputs = {
             secret: "1111",
             address: spender.address,
-            balance: ethers.utils.parseEther("10"),
-            newBalance: ethers.utils.parseEther("2.5"),
-            value: ethers.utils.parseEther("7.5"),
+            balance: ethers.utils.parseEther("10").toBigInt(),
+            newBalance: ethers.utils.parseEther("2.5").toBigInt(),
+            value: ethers.utils.parseEther("7.5").toBigInt(),
             nonce: 1,
         };
         let poseidonHashJsSecretUserAddressResult = poseidonHasher.F.toString(poseidonHasher([
@@ -62,27 +62,30 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         ]));
 
         const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness(testInputs);
-        
+
         await zkHiddenBalancePoseidonCircuit.assertOut(witness, {
             out: [
-            poseidonHashJsSecretUserAddressResult,
-            poseidonHashJsSecretBalanceResult,
-            poseidonHashJsNewSecretBalanceResult,
+                poseidonHashJsSecretUserAddressResult,
+                poseidonHashJsSecretBalanceResult,
+                poseidonHashJsNewSecretBalanceResult,
             ],
         });
-
+        
         // on chain verify
         const { proof, publicSignals } = await groth16.fullProve(
             testInputs,
             "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
             "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_0000.zkey",
         );
-
+        
         const proofCalldata = await groth16.exportSolidityCallData(proof, publicSignals);
+                
         const proofCalldataFormatted = JSON.parse("[" + proofCalldata + "]");
 
         const vKey = JSON.parse(readFileSync("circuits/ZKHiddenBalancePoseidon/verification_key.json"));
+                
         const res = await groth16.verify(vKey, publicSignals, proof);
+                
         expect(res).to.be.true;
 
         // verifying on-chain
