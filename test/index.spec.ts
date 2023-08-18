@@ -110,6 +110,7 @@ describe("ERC-4337 Account Abstraction", function () {
           owner,
           factoryAddress: config.zkTeamAccountFactory.address,
           provider: ethers.provider,
+          index: 0,
       });
 
       await config.sendUserOp(zkTeamAccount, {
