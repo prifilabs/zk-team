@@ -116,15 +116,15 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         }
     });
 
-    it.skip("Value smaller than Balance and New Balance incorrect should fail", async function () {
+    it("Value smaller than Balance and New Balance incorrect should fail", async function () {
         const { spender, poseidonHasher, zkHiddenBalancePoseidonCircuit } = config;
 
         const testInputs = {
             secret: "1111",
             address: spender.address,
-            balance: ethers.parseEther("10"),
-            newBalance: ethers.parseEther("2.5"),
-            value: ethers.parseEther("9.5"),
+            balance: ethers.utils.parseEther("10"),
+            newBalance: ethers.utils.parseEther("2.5"),
+            value: ethers.utils.parseEther("9.5"),
             nonce: 1,
         };
 
@@ -136,15 +136,15 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         }
     });
 
-    it.skip("Secret incorrect should fail", async function () {
+    it("Secret incorrect should fail", async function () {
         const { spender, poseidonHasher, zkHiddenBalancePoseidonCircuit } = config;
 
         const testInputs = {
             secret: "1111",
             address: spender.address,
-            balance: ethers.parseEther("10"),
-            newBalance: ethers.parseEther("2.5"),
-            value: ethers.parseEther("7.5"),
+            balance: ethers.utils.parseEther("10"),
+            newBalance: ethers.utils.parseEther("2.5"),
+            value: ethers.utils.parseEther("7.5"),
             nonce: 1,
         };
         let poseidonHashJsSecretUserAddressResult = poseidonHasher.F.toString(
