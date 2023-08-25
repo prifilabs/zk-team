@@ -4,6 +4,7 @@
     "description": "Privacy-Preserving Account-Abstraction for Teams",
     "main": "lib/src/index.js",
     "scripts": {
+        "circom": "",
         "build": "npx tsc",
         "test": "npx hardhat test",
         "coverage": "nyc ts-mocha test/index.spec.ts && npx hardhat coverage",
@@ -55,7 +56,10 @@
     "dependencies": {
         "@account-abstraction/contracts": "^0.6.0",
         "@account-abstraction/sdk": "^0.6.0",
-        "ethers": "^5.7.2"
+        "@zk-kit/incremental-merkle-tree": "^1.1.0",
+        "@zk-kit/incremental-merkle-tree.sol": "^1.7.0",
+        "ethers": "^5.7.2",
+        "poseidon-lite": "^0.2.0"
     },
     "lint-staged": {
         "*.{js,css,md,ts,sol}": "prettier --write"

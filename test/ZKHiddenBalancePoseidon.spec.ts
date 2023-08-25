@@ -6,87 +6,118 @@ import { ethers } from "hardhat";
 import { expect, assert } from "chai";
 
 import { groth16 } from "snarkjs";
-import { buildPoseidon } from "circomlibjs";
 import { wasm as wasm_tester} from "circom_tester";
+import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
+import { poseidon1, poseidon2, poseidon3 } from "poseidon-lite"
 
-describe.only("ZKHiddenBalancePoseidon", function () {
+function generateValues(tree, balance){
+    const nullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+    const secret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+    const nullifierHash = poseidon1([nullifier]);
+    const commitmentHash = poseidon3([nullifier, secret, balance]);
+    tree.insert(commitmentHash);
+    const proof = tree.createProof(tree.indexOf(commitmentHash));
+    const siblings = proof.siblings.map( (s) => s[0]); 
+    const pathIndices = proof.pathIndices;
+    const root = proof.root;
+    return { nullifier, secret, nullifierHash, commitmentHash, siblings, pathIndices, root }
+}
 
-    let config;
+function generateSignals(value, oldBalance, newBalance){
+    const tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2);
     
-    it("Circuit Wasm Setup", async function () {
-        const [spender] = await ethers.getSigners();
+    const oldValues = generateValues(tree, oldBalance);
+    const newValues = generateValues(tree, newBalance);
 
-        const zkHiddenBalancePoseidonCircuit = await wasm_tester(resolve("circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon.circom"));
+    const inputs = {
+        value,
+        oldBalance,
+        oldNullifier: oldValues.nullifier,
+        oldSecret: oldValues.secret,
+        oldTreeSiblings: oldValues.siblings,
+        oldTreePathIndices: oldValues.pathIndices,
+        newBalance,
+        newNullifier: newValues.nullifier,
+        newSecret: newValues.secret,
+        newTreeSiblings: newValues.siblings,
+        newTreePathIndices: newValues.pathIndices,
+        callDataHash: poseidon1([ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt()])
+    };
+    
+    const outputs = {
+        oldNullifierHash: oldValues.nullifierHash,
+        oldRoot: oldValues.root,
+        newCommitmentHash: newValues.commitmentHash,
+        newRoot: newValues.root,
+    };
 
-        const poseidonHasher = await buildPoseidon();
+    return { inputs, outputs };
+}
 
-        config = {
-            spender,
-            poseidonHasher,
-            zkHiddenBalancePoseidonCircuit
-        };
-        
+describe("ZKHiddenBalancePoseidon", function () {
+    
+    let zkHiddenBalancePoseidonCircuit;
+    
+    before(async function () {
+         zkHiddenBalancePoseidonCircuit = await wasm_tester(resolve("circuits/ZKHiddenBalancePoseidon.circom"));
     });
     
-    it("Value smaller than Balance and New Balance Correct should pass", async function () {
-               
-        const { spender, poseidonHasher, zkHiddenBalancePoseidonCircuit } = config;
-                
-        const ZKHiddenBalancePoseidonVerifier = await ethers.getContractFactory("Groth16Verifier");
-        const zkHiddenBalancePoseidonVerifier = await ZKHiddenBalancePoseidonVerifier.deploy();
+    it("should calculate witness on good inputs", async function () {
+                       
+        const oldBalance = ethers.utils.parseEther("10").toBigInt();
+        const value = ethers.utils.parseEther("7.5").toBigInt();
+        const newBalance = ethers.utils.parseEther("2.5").toBigInt();
         
-        const testInputs = {
-            secret: "1111",
-            address: spender.address,
-            balance: ethers.utils.parseEther("10").toBigInt(),
-            newBalance: ethers.utils.parseEther("2.5").toBigInt(),
-            value: ethers.utils.parseEther("7.5").toBigInt(),
-            nonce: 1,
-        };
-        let poseidonHashJsSecretUserAddressResult = poseidonHasher.F.toString(poseidonHasher([
-            testInputs.address,
-            testInputs.secret,
-            testInputs.nonce,
-        ]));
-
-        let poseidonHashJsSecretBalanceResult = poseidonHasher.F.toString(poseidonHasher([
-            testInputs.balance,
-            testInputs.secret,
-            testInputs.nonce,
-        ]));
-
-        let poseidonHashJsNewSecretBalanceResult = poseidonHasher.F.toString(poseidonHasher([
-            testInputs.newBalance,
-            testInputs.secret,
-            testInputs.nonce,
-        ]));
-
-        const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness(testInputs);
-
-        await zkHiddenBalancePoseidonCircuit.assertOut(witness, {
-            out: [
-                poseidonHashJsSecretUserAddressResult,
-                poseidonHashJsSecretBalanceResult,
-                poseidonHashJsNewSecretBalanceResult,
-            ],
-        });
+        const {inputs, outputs} = generateSignals(value, oldBalance, newBalance);
         
-        // on chain verify
+        const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness(inputs);
+
+        await zkHiddenBalancePoseidonCircuit.assertOut(witness, outputs);
+        
+    });
+
+    it("should be proved off-chain on good inputs", async function () {
+
+        const oldBalance = ethers.utils.parseEther("10").toBigInt();
+        const value = ethers.utils.parseEther("7.5").toBigInt();
+        const newBalance = ethers.utils.parseEther("2.5").toBigInt();
+        
+        const { inputs }  = generateSignals(value, oldBalance, newBalance);
+        
         const { proof, publicSignals } = await groth16.fullProve(
-            testInputs,
-            "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
-            "circuits/ZKHiddenBalancePoseidon/ZKHiddenBalancePoseidon_0001.zkey",
+            inputs,
+            "zk-data/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
+            "zk-data/ZKHiddenBalancePoseidon_0001.zkey",
         );
         
-        const proofCalldata = await groth16.exportSolidityCallData(proof, publicSignals);
-                
-        const proofCalldataFormatted = JSON.parse("[" + proofCalldata + "]");
-
-        const vKey = JSON.parse(readFileSync("circuits/ZKHiddenBalancePoseidon/verification_key.json"));
+        const vKey = JSON.parse(readFileSync("zk-data/verification_key.json"));
                 
         const res = await groth16.verify(vKey, publicSignals, proof);
-                
+        
         expect(res).to.be.true;
+    
+    });
+    
+    it("should be proved on-chain on good inputs", async function () {
+    
+        const oldBalance = ethers.utils.parseEther("10").toBigInt();
+        const value = ethers.utils.parseEther("7.5").toBigInt();
+        const newBalance = ethers.utils.parseEther("2.5").toBigInt();
+        
+        const { inputs, outputs } = generateSignals(value, oldBalance, newBalance);
+        
+        const { proof, publicSignals } = await groth16.fullProve(
+            inputs,
+            "zk-data/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
+            "zk-data/ZKHiddenBalancePoseidon_0001.zkey",
+        );
+        
+        const ZKHiddenBalancePoseidonVerifier = await ethers.getContractFactory("Groth16Verifier");
+        const zkHiddenBalancePoseidonVerifier = await ZKHiddenBalancePoseidonVerifier.deploy();
+    
+        const proofCalldata = await groth16.exportSolidityCallData(proof, publicSignals);
+
+        const proofCalldataFormatted = JSON.parse("[" + proofCalldata + "]");
 
         // verifying on-chain
         expect(
@@ -98,89 +129,35 @@ describe.only("ZKHiddenBalancePoseidon", function () {
         )).to.be.true;
     });
 
-    it("Value larger than Balance and New Balance Correct should fail", async function () {
-        const { spender, poseidonHasher, zkHiddenBalancePoseidonCircuit } = config;
-
-        const testInputs = {
-            secret: "1111",
-            address: spender.address,
-            balance: ethers.utils.parseEther("10").toBigInt(),
-            newBalance: ethers.utils.parseEther("2.5").toBigInt(),
-            value: ethers.utils.parseEther("17.5").toBigInt(),
-            nonce: 1,
-        };
-
+    it("should fail when value greater than old balance", async function () {
+        
+        const oldBalance = ethers.utils.parseEther("10").toBigInt();
+        const value = ethers.utils.parseEther("17.5").toBigInt();
+        const newBalance = ethers.utils.parseEther("-7.5").toBigInt();
+        
+        const {inputs, outputs} = generateSignals(value, oldBalance, newBalance);
+        
         try {
-            await zkHiddenBalancePoseidonCircuit.calculateWitness(testInputs);
+            await zkHiddenBalancePoseidonCircuit.calculateWitness(inputs);
             assert(false);
         } catch (e) {
             assert(e.message.includes("Assert Failed"));
         }
     });
 
-    it("Value smaller than Balance and New Balance incorrect should fail", async function () {
-        const { spender, poseidonHasher, zkHiddenBalancePoseidonCircuit } = config;
-
-        const testInputs = {
-            secret: "1111",
-            address: spender.address,
-            balance: ethers.utils.parseEther("10"),
-            newBalance: ethers.utils.parseEther("2.5"),
-            value: ethers.utils.parseEther("9.5"),
-            nonce: 1,
-        };
+    it("should fail when new balance is incorrect", async function () {
+        
+        const oldBalance = ethers.utils.parseEther("10").toBigInt();
+        const value = ethers.utils.parseEther("7.5").toBigInt();
+        const newBalance = ethers.utils.parseEther("3.5").toBigInt();
+        
+        const {inputs, outputs} = generateSignals(value, oldBalance, newBalance);
 
         try {
-            await zkHiddenBalancePoseidonCircuit.calculateWitness(testInputs);
+            await zkHiddenBalancePoseidonCircuit.calculateWitness(inputs);
             assert(false);
         } catch (e) {
             assert(e.message.includes("Assert Failed"));
         }
-    });
-
-    it("Secret incorrect should fail", async function () {
-        const { spender, poseidonHasher, zkHiddenBalancePoseidonCircuit } = config;
-
-        const testInputs = {
-            secret: "1111",
-            address: spender.address,
-            balance: ethers.utils.parseEther("10").toBigInt(),
-            newBalance: ethers.utils.parseEther("2.5").toBigInt(),
-            value: ethers.utils.parseEther("7.5").toBigInt(),
-            nonce: 1,
-        };
-        let poseidonHashJsSecretUserAddressResult = poseidonHasher.F.toString(poseidonHasher([
-            testInputs.address,
-            testInputs.secret,
-            testInputs.nonce,
-        ]));
-
-        let poseidonHashJsSecretBalanceResult = poseidonHasher.F.toString(poseidonHasher([
-            testInputs.balance,
-            testInputs.secret,
-            testInputs.nonce,
-        ]));
-
-        let poseidonHashJsNewSecretBalanceResult = poseidonHasher.F.toString(poseidonHasher([
-            testInputs.newBalance,
-            testInputs.secret,
-            testInputs.nonce,
-        ]));
-
-        const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness({
-            ...testInputs,
-            secret: "2222",
-        });
-
-        try {
-            await zkHiddenBalancePoseidonCircuit.assertOut(witness, {
-                out: [
-                    poseidonHashJsSecretUserAddressResult,
-                    poseidonHashJsSecretBalanceResult,
-                    poseidonHashJsNewSecretBalanceResult,
-                ],
-            });
-            assert(false);
-        } catch (e) {}
     });
 });
