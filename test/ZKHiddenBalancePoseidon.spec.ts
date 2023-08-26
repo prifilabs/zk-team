@@ -112,12 +112,16 @@ describe("ZKHiddenBalancePoseidon", function () {
             "zk-data/ZKHiddenBalancePoseidon_0001.zkey",
         );
         
+        console.log(publicSignals);
+        
         const ZKHiddenBalancePoseidonVerifier = await ethers.getContractFactory("Groth16Verifier");
         const zkHiddenBalancePoseidonVerifier = await ZKHiddenBalancePoseidonVerifier.deploy();
     
         const proofCalldata = await groth16.exportSolidityCallData(proof, publicSignals);
 
         const proofCalldataFormatted = JSON.parse("[" + proofCalldata + "]");
+        
+        console.log(JSON.stringify(proofCalldataFormatted, null, 2));
 
         // verifying on-chain
         expect(

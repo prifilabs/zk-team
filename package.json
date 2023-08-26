@@ -59,7 +59,8 @@
         "@zk-kit/incremental-merkle-tree": "^1.1.0",
         "@zk-kit/incremental-merkle-tree.sol": "^1.7.0",
         "ethers": "^5.7.2",
-        "poseidon-lite": "^0.2.0"
+        "poseidon-lite": "^0.2.0",
+        "poseidon-solidity": "^0.0.5"
     },
     "lint-staged": {
         "*.{js,css,md,ts,sol}": "prettier --write"

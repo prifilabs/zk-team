@@ -12,6 +12,9 @@ import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "@account-abstraction/contracts/core/BaseAccount.sol";
 import "@account-abstraction/contracts/samples/callback/TokenCallbackHandler.sol";
 
+import "hardhat/console.sol";
+import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
+
 /**
   * minimal account.
   *  this is sample minimal account.
@@ -22,6 +25,9 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     using ECDSA for bytes32;
 
     address public owner;
+    
+    using IncrementalBinaryTree for IncrementalTreeData;
+    IncrementalTreeData public tree;
 
     IEntryPoint private immutable _entryPoint;
 
@@ -81,6 +87,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
 
     function _initialize(address anOwner) internal virtual {
         owner = anOwner;
+        tree.init(20,0);
         emit ZkTeamAccountInitialized(_entryPoint, owner);
     }
 

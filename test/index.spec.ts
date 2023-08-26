@@ -1,3 +1,5 @@
+import { expect } from 'chai'
+
 import { ethers } from "hardhat";
 
 import * as EntryPoint from '@account-abstraction/contracts/artifacts/EntryPoint.json';
@@ -5,13 +7,12 @@ import * as VerifyingPaymaster from '@account-abstraction/contracts/artifacts/Ve
 
 import { HttpRpcClient } from '@account-abstraction/sdk'
 
-import * as ZkTeamAccountFactory from '../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json';
-import * as ZkTeamAccount from '../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json';
-
 import { VerifyingPaymasterAPI } from "../src/VerifyingPaymasterAPI";
 import { ZkTeamAccountAPI } from "../src/ZkTeamAccountAPI";
 
 import { DefaultGasOverheads } from "@account-abstraction/sdk";
+
+import { proxy, PoseidonT3 } from "poseidon-solidity";
 
 async function deployHardhat(){
     const EntryPointFactory = await ethers.getContractFactory(EntryPoint.abi, EntryPoint.bytecode);
@@ -20,15 +21,17 @@ async function deployHardhat(){
     const bundlerAddress = await bundler.getAddress();
     const sendUserOp = async function(account, params){
         
+        // console.log(params);
+        
         const op = await account.createSignedUserOp(params);
         
-        console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
+        // console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
         
         await entryPoint.handleOps([op], bundlerAddress);
         
         const uoHash =  await entryPoint.getUserOpHash(op); 
         const txHash = await account.getUserOpReceipt(uoHash);
-        console.log(`\nUserOperation executed - Transaction hash: ${txHash}`);
+        // console.log(`\nUserOperation executed - Transaction hash: ${txHash}`);
     }
     return { entryPointAddress: entryPoint.address, bundlerAddress, sendUserOp }
 }
@@ -41,7 +44,7 @@ async function deployLocal(){
         
         const op = await account.createSignedUserOp(params);
         
-        console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
+        // console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
         
         const client = new HttpRpcClient(
           bundlerUrl,
@@ -49,15 +52,15 @@ async function deployLocal(){
           1337 // chainid
         );
         const uoHash =  await client.sendUserOpToBundler(op) 
-        console.log(`\nUserOperation sent to bundler - UserOperation hash: ${uoHash}`);
+        // console.log(`\nUserOperation sent to bundler - UserOperation hash: ${uoHash}`);
 
         const txHash = await account.getUserOpReceipt(uoHash);
-        console.log(`\nUserOperation executed - Transaction hash: ${txHash}`);
+        // console.log(`\nUserOperation executed - Transaction hash: ${txHash}`);
     }
     return { entryPointAddress, bundlerAddress, sendUserOp }
 }
 
-describe("ERC-4337 Account Abstraction", function () {
+describe.only("ERC-4337 Account Abstraction", function () {
     
     let config;
   
@@ -66,22 +69,60 @@ describe("ERC-4337 Account Abstraction", function () {
     
         let init = (chainId == 1337)? await deployLocal() :  await deployHardhat() ;
 
+        const [sender] = await ethers.getSigners()
+
+        // First check if the proxy exists
+        if (await ethers.provider.getCode(proxy.address) === '0x') {
+          // fund the keyless account
+          await sender.sendTransaction({
+            to: proxy.from,
+            value: proxy.gas,
+          })
+
+          // then send the presigned transaction deploying the proxy
+          await ethers.provider.sendTransaction(proxy.tx)
+        }
+
+        // Then deploy the hasher, if needed
+        if (await ethers.provider.getCode(PoseidonT3.address) === '0x') {
+          await sender.sendTransaction({
+            to: proxy.address,
+            data: PoseidonT3.data
+          })
+        }
+
+        // console.log(`PoseidonT3 deployed to: ${PoseidonT3.address}`)
+
+        const IncrementalBinaryTreeLibFactory = await ethers.getContractFactory("IncrementalBinaryTree", {
+            libraries: {
+                PoseidonT3: PoseidonT3.address
+            }
+        })
+        const incrementalBinaryTreeLib = await IncrementalBinaryTreeLibFactory.deploy()
+
+        await incrementalBinaryTreeLib.deployed()
+
+        // console.log(`IncrementalBinaryTree library has been deployed to: ${incrementalBinaryTreeLib.address}`)
+
+        const zkTeamAccountFactoryFactory = await ethers.getContractFactory("ZkTeamAccountFactory", {        
+            libraries: {
+                IncrementalBinaryTree: incrementalBinaryTreeLib.address
+        }});
+        const zkTeamAccountFactory = await zkTeamAccountFactoryFactory.deploy(init.entryPointAddress);
+
         const Greeter = await ethers.getContractFactory("Greeter");
         const greeter = await Greeter.deploy("Hello World!");
 
-        const zkTeamAccountFactoryFactory = await ethers.getContractFactory(ZkTeamAccountFactory.abi, ZkTeamAccountFactory.bytecode);
-        const zkTeamAccountFactory = await zkTeamAccountFactoryFactory.deploy(init.entryPointAddress);
-
-        console.log(
-            "\nMain Contract Addresses: ",
-            "\no EntryPointAddress:", init.entryPointAddress,
-            "\no ZkTeamAccountFactory:", zkTeamAccountFactory.address,
-            "\n",
-        );
+        // console.log(
+        //     "\nMain Contract Addresses: ",
+        //     "\no EntryPointAddress:", init.entryPointAddress,
+        //     "\no ZkTeamAccountFactory:", zkTeamAccountFactory.address,
+        //     "\n",
+        // );
 
         config = { ...init, greeter, zkTeamAccountFactory }
     })  
-
+    
   it("Should test Simple Account (without Paymaster)", async function () {
 
       const owner = ethers.Wallet.createRandom();
@@ -94,16 +135,16 @@ describe("ERC-4337 Account Abstraction", function () {
           value: ethers.utils.parseEther('0.1'),
       })
       
-      console.log(
-          `\nBalances:`,
-          `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
-          `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
-          `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
-          `\n`
-      );
+      // console.log(
+      //     `\nBalances:`,
+      //     `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
+      //     `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
+      //     `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
+      //     `\n`
+      // );
       
-      console.log(`\n Greeter says ${await config.greeter.greet()}\n`);
-      
+      expect(await config.greeter.greet()).to.equal("Hello World!");
+         
       const zkTeamAccount = new ZkTeamAccountAPI({
           provider: ethers.provider,
           entryPointAddress: config.entryPointAddress,
@@ -118,15 +159,16 @@ describe("ERC-4337 Account Abstraction", function () {
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]),
       });
       
-      console.log(
-          `\nBalances:`,
-          `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
-          `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
-          `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
-          `\n`
-      );
+      // console.log(
+      //     `\nBalances:`,
+      //     `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
+      //     `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
+      //     `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
+      //     `\n`
+      // );
       
-      console.log(`\n Greeter says ${await config.greeter.greet()}\n`);
+      expect(await config.greeter.greet()).to.equal("Hola Mundo!");
+      
   })
   
   it("Should test Simple Account with Paymaster", async function () {
@@ -147,17 +189,17 @@ describe("ERC-4337 Account Abstraction", function () {
       
       await verifyingPaymaster.addStake(21600, { value: ethers.utils.parseEther('0.01') })
       
-      console.log(
-          `\nBalances:`,
-          `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
-          `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
-          `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
-          `\no Paymaster ${verifyingPaymaster.address}: ${ethers.utils.formatEther(await verifyingPaymaster.getDeposit())}`,
-          `\n`
-      );
+      // console.log(
+      //     `\nBalances:`,
+      //     `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
+      //     `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
+      //     `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
+      //     `\no Paymaster ${verifyingPaymaster.address}: ${ethers.utils.formatEther(await verifyingPaymaster.getDeposit())}`,
+      //     `\n`
+      // );
       
-      console.log(`\n Greeter says ${await config.greeter.greet()}\n`);
-      
+      expect(await config.greeter.greet()).to.equal("Hola Mundo!")
+            
       const zkTeamAccount = new ZkTeamAccountAPI({
           provider: ethers.provider,
           entryPointAddress: config.entryPointAddress,
@@ -173,16 +215,16 @@ describe("ERC-4337 Account Abstraction", function () {
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
       });      
       
-      console.log(
-          `\nBalances:`,
-          `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
-          `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
-          `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
-          `\no Paymaster ${verifyingPaymaster.address}: ${ethers.utils.formatEther(await verifyingPaymaster.getDeposit())}`,
-          `\n`
-      );
-      
-      console.log(`\n Greeter says ${await config.greeter.greet()}\n`);
+      // console.log(
+      //     `\nBalances:`,
+      //     `\no Bundler ${config.bundlerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(config.bundlerAddress))}`,
+      //     `\no Owner ${ownerAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(ownerAddress))}`,
+      //     `\no ZkTeamAccount ${accountAddress}: ${ethers.utils.formatEther(await ethers.provider.getBalance(accountAddress))}`,
+      //     `\no Paymaster ${verifyingPaymaster.address}: ${ethers.utils.formatEther(await verifyingPaymaster.getDeposit())}`,
+      //     `\n`
+      // );
+            
+      expect(await config.greeter.greet()).to.equal("Bonjour Le Monde!")
       
   })
 
