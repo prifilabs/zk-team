@@ -60,6 +60,32 @@ async function deployLocal(){
     return { entryPointAddress, bundlerAddress, sendUserOp }
 }
 
+async function deployPoseidon(){
+    // see https://github.com/vimwitch/poseidon-solidity
+    
+    const [sender] = await ethers.getSigners()
+
+    // First check if the proxy exists
+    if (await ethers.provider.getCode(proxy.address) === '0x') {
+      // fund the keyless account
+      await sender.sendTransaction({
+        to: proxy.from,
+        value: proxy.gas,
+      })
+
+      // then send the presigned transaction deploying the proxy
+      await ethers.provider.sendTransaction(proxy.tx)
+    }
+
+    // Then deploy the hasher, if needed
+    if (await ethers.provider.getCode(PoseidonT3.address) === '0x') {
+      await sender.sendTransaction({
+        to: proxy.address,
+        data: PoseidonT3.data
+      })
+    }
+}
+
 describe.only("ERC-4337 Account Abstraction", function () {
     
     let config;
@@ -69,29 +95,7 @@ describe.only("ERC-4337 Account Abstraction", function () {
     
         let init = (chainId == 1337)? await deployLocal() :  await deployHardhat() ;
 
-        const [sender] = await ethers.getSigners()
-
-        // First check if the proxy exists
-        if (await ethers.provider.getCode(proxy.address) === '0x') {
-          // fund the keyless account
-          await sender.sendTransaction({
-            to: proxy.from,
-            value: proxy.gas,
-          })
-
-          // then send the presigned transaction deploying the proxy
-          await ethers.provider.sendTransaction(proxy.tx)
-        }
-
-        // Then deploy the hasher, if needed
-        if (await ethers.provider.getCode(PoseidonT3.address) === '0x') {
-          await sender.sendTransaction({
-            to: proxy.address,
-            data: PoseidonT3.data
-          })
-        }
-
-        // console.log(`PoseidonT3 deployed to: ${PoseidonT3.address}`)
+        await deployPoseidon();
 
         const IncrementalBinaryTreeLibFactory = await ethers.getContractFactory("IncrementalBinaryTree", {
             libraries: {
