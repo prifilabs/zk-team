@@ -86,7 +86,7 @@ async function deployPoseidon(){
     }
 }
 
-describe.only("ERC-4337 Account Abstraction", function () {
+describe("ERC-4337 Account Abstraction", function () {
     
     let config;
   
