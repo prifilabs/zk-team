@@ -1,3 +1,5 @@
+import { resolve } from "path";
+
 import { Provider } from '@ethersproject/providers'
 import { BigNumber, BigNumberish, Contract } from 'ethers'
 import { arrayify, hexConcat } from 'ethers/lib/utils'
@@ -15,6 +17,11 @@ import { getUserOpHash, NotPromise, packUserOp } from '@account-abstraction/util
 
 import * as ZkTeamAccountFactory from '../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json';
 import * as ZkTeamAccount from '../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json';
+
+import { groth16 } from "snarkjs";
+import { wasm as wasm_tester} from "circom_tester";
+import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
+import { poseidon1, poseidon2, poseidon3 } from "poseidon-lite"
 
 /**
  * constructor params, added no top of base params:
@@ -174,7 +181,7 @@ export class ZkTeamAccountAPI {
    * NOTE: createUnsignedUserOp will add to this value the cost of creation, if the contract is not yet created.
    */
   async getVerificationGasLimit (): Promise<BigNumberish> {
-    return 100000
+    return 1000000
   }
 
   /**
@@ -207,13 +214,16 @@ export class ZkTeamAccountAPI {
    * @param value
    * @param data
    */
-  async encodeExecute (target: string, value: BigNumberish, data: string): Promise<string> {
+  async encodeExecute (nullifierHash: BigNumberish, commitmentHash: BigNumberish, root: BigNumberish, value: BigNumberish,  target: string, data: string): Promise<string> {
     const accountContract = await this._getAccountContract()
     return accountContract.interface.encodeFunctionData(
       'execute',
       [
-        target,
+        nullifierHash,
+        commitmentHash,
+        root,
         value,
+        target,
         data
       ])
   }
@@ -225,8 +235,13 @@ export class ZkTeamAccountAPI {
     }
 
     const value = parseNumber(detailsForUserOp.value) ?? BigNumber.from(0)
-    const callData = await this.encodeExecute(detailsForUserOp.target, value, detailsForUserOp.data)
-
+    const nullifierHash = poseidon1([detailsForUserOp.oldNullifier]); 
+    const commitmentHash = poseidon3([detailsForUserOp.newNullifier, detailsForUserOp.newSecret, detailsForUserOp.newBalance]);
+    const tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, detailsForUserOp.leaves);
+    tree.insert(commitmentHash);
+    const root = tree.root;
+    
+    const callData = await this.encodeExecute(nullifierHash, commitmentHash, root, value, detailsForUserOp.target, detailsForUserOp.data)
     const callGasLimit = parseNumber(detailsForUserOp.gasLimit) ?? await this.provider.estimateGas({
       from: this.entryPointAddress,
       to: this.getAccountAddress(),
@@ -256,7 +271,7 @@ export class ZkTeamAccountAPI {
    * - if gas or nonce are missing, read them from the chain (note that we can't fill gaslimit before the account is created)
    * @param info
    */
-  async createUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
+  async createUnsignedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
     const {
       callData,
       callGasLimit
@@ -306,9 +321,109 @@ export class ZkTeamAccountAPI {
     return {
       ...partialUserOp,
       preVerificationGas: this.getPreVerificationGas(partialUserOp),
-      signature: info.signature,
+      signature: '',
     }
   }
+
+  /**
+     * Sign the filled userOp.
+     * @param userOp the UserOperation to sign (with signature field ignored)
+     */
+    async signUserOp (userOp: UserOperationStruct): Promise<UserOperationStruct> {
+      const userOpHash = await this.getUserOpHash(userOp)
+      const signature = await this.owner.signMessage(arrayify(userOpHash))
+      return {
+        ...userOp,
+        signature
+      }
+    }
+
+    /**
+     * helper method: create and sign a user operation.
+     * @param info transaction details for the userOp
+     */
+    async createSignedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
+      return await this.signUserOp(await this.createUnsignedUserOp(info))
+    }
+    
+    /**
+     * helper method: create and sign a user operation.
+     * @param info transaction details for the userOp
+     */
+    async createProvedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
+         const oldNullifierHash  = poseidon1([info.oldNullifier]);
+         const oldTree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, info.leaves);
+         const oldRoot = oldTree.root; 
+         const oldCommitmentHash = poseidon3([info.oldNullifier, info.oldSecret, info.oldBalance]);   
+         const oldMerkleProof = oldTree.createProof(oldTree.indexOf(oldCommitmentHash));
+         const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]); 
+         const oldTreePathIndices = oldMerkleProof.pathIndices;
+
+         let userOp = await this.createUnsignedUserOp(info);
+
+        const newCommitmentHash = poseidon3([info.newNullifier, info.newSecret, info.newBalance]);
+        const newTree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, info.leaves);
+        const newRoot = newTree.root;
+        const newMerkleProof = newTree.createProof(newTree.indexOf(newCommitmentHash));
+        const newTreeSiblings = newMerkleProof.siblings.map( (s) => s[0]); 
+        const newTreePathIndices = newMerkleProof.pathIndices;
+
+        const callDataHash = BigNumber.from(ethers.utils.keccak256(userOp.callData)).toBigInt();
+
+        const inputs = {
+            value: info.value,
+            oldBalance: info.oldBalance,
+            oldNullifier: info.oldNullifier,
+            oldSecret: info.oldSecret,
+            oldTreeSiblings,
+            oldTreePathIndices,
+            newBalance: info.newBalance,
+            newNullifier: info.newNullifier,
+            newSecret: info.newSecret,
+            newTreeSiblings,
+            newTreePathIndices, 
+            callDataHash
+        };
+
+        const outputs = {
+            oldNullifierHash,
+            oldRoot,
+            newCommitmentHash,
+            newRoot,
+        };
+        
+        // These three lines are just for checking the proof
+        const zkHiddenBalancePoseidonCircuit = await wasm_tester(resolve("circuits/ZKHiddenBalancePoseidon.circom"));
+        const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness(inputs);
+        await zkHiddenBalancePoseidonCircuit.assertOut(witness, outputs);
+
+        const { proof, publicSignals } = await groth16.fullProve(
+            inputs,
+            "zk-data/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
+            "zk-data/ZKHiddenBalancePoseidon_0001.zkey",
+        );
+
+        const proofCalldata = await groth16.exportSolidityCallData(proof, publicSignals);      
+        const proofCalldataFormatted = JSON.parse("[" + proofCalldata + "]");
+  
+        const ZKHiddenBalancePoseidonVerifier = await ethers.getContractFactory("Groth16Verifier");
+        const zkHiddenBalancePoseidonVerifier = await ZKHiddenBalancePoseidonVerifier.deploy();
+
+        // verifying on-chain
+        console.log(
+        await zkHiddenBalancePoseidonVerifier.verifyProof(
+            proofCalldataFormatted[0],
+            proofCalldataFormatted[1],
+            proofCalldataFormatted[2],
+            proofCalldataFormatted[3],
+        ));
+  
+        return {
+            ...userOp,
+            signature: ethers.utils.defaultAbiCoder.encode([ "uint256[2]",  "uint256[2][2]", "uint256[2]", "uint256[6]"], proofCalldataFormatted)
+        }
+}
+
 
   /**
    * get the transaction that has this userOpHash mined, or null if not found

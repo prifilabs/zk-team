@@ -15,6 +15,8 @@ import "@account-abstraction/contracts/samples/callback/TokenCallbackHandler.sol
 import "hardhat/console.sol";
 import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
 
+import "./verifier.sol";
+
 /**
   * minimal account.
   *  this is sample minimal account.
@@ -28,15 +30,13 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     
     using IncrementalBinaryTree for IncrementalTreeData;
     IncrementalTreeData public tree;
+    
+    mapping(uint256 => bool) public nullifiers;
 
     IEntryPoint private immutable _entryPoint;
+    Groth16Verifier private immutable _verifier;
 
     event ZkTeamAccountInitialized(IEntryPoint indexed entryPoint, address indexed owner);
-
-    modifier onlyOwner() {
-        _onlyOwner();
-        _;
-    }
 
     /// @inheritdoc BaseAccount
     function entryPoint() public view virtual override returns (IEntryPoint) {
@@ -47,33 +47,10 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     // solhint-disable-next-line no-empty-blocks
     receive() external payable {}
 
-    constructor(IEntryPoint anEntryPoint) {
+    constructor(IEntryPoint anEntryPoint, Groth16Verifier aVerifier) {
         _entryPoint = anEntryPoint;
+        _verifier = aVerifier;
         _disableInitializers();
-    }
-
-    function _onlyOwner() internal view {
-        //directly from EOA owner, or through the account itself (which gets redirected through execute())
-        require(msg.sender == owner || msg.sender == address(this), "only owner");
-    }
-
-    /**
-     * execute a transaction (called directly from owner, or by entryPoint)
-     */
-    function execute(address dest, uint256 value, bytes calldata func) external {
-        _requireFromEntryPointOrOwner();
-        _call(dest, value, func);
-    }
-
-    /**
-     * execute a sequence of transactions
-     */
-    function executeBatch(address[] calldata dest, bytes[] calldata func) external {
-        _requireFromEntryPointOrOwner();
-        require(dest.length == func.length, "wrong array lengths");
-        for (uint256 i = 0; i < dest.length; i++) {
-            _call(dest[i], 0, func[i]);
-        }
     }
 
     /**
@@ -82,36 +59,71 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
       * the implementation by calling `upgradeTo()`
      */
     function initialize(address anOwner) public virtual initializer {
-        _initialize(anOwner);
-    }
-
-    function _initialize(address anOwner) internal virtual {
         owner = anOwner;
-        tree.init(20,0);
+        tree.init(20, 0);
+        tree.insert(42); // Bug: I have no clue why it does not work without this first insert
         emit ZkTeamAccountInitialized(_entryPoint, owner);
     }
-
-    // Require the function call went through EntryPoint or owner
-    function _requireFromEntryPointOrOwner() internal view {
-        require(msg.sender == address(entryPoint()) || msg.sender == owner, "account: not Owner or EntryPoint");
-    }
-
+    
     /// implement template method of BaseAccount
     function _validateSignature(UserOperation calldata userOp, bytes32 userOpHash)
     internal override virtual returns (uint256 validationData) {
-        // bytes32 hash = userOpHash.toEthSignedMessageHash();
-        // if (owner != hash.recover(userOp.signature))
-        //     return SIG_VALIDATION_FAILED;
-        return 0;
+        if (userOp.signature.length == 65){
+            bytes32 hash = userOpHash.toEthSignedMessageHash();
+            if (owner != hash.recover(userOp.signature))
+                return SIG_VALIDATION_FAILED;
+            return 0;
+        } else {
+            ( uint256[2] memory pi_a, uint256[2][2] memory pi_b, uint256[2] memory pi_c, uint256[6] memory signals ) = abi.decode(userOp.signature, (uint256[2], uint256[2][2], uint256[2], uint256[6]));
+            ( uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value ) = abi.decode(userOp.callData[4:132], (uint256, uint256, uint256, uint256));
+            // check value matches calldata
+            if (value != signals[4]) return SIG_VALIDATION_FAILED;
+            // check commitmentHash matches the callData
+            if (commitmentHash != signals[2]) return SIG_VALIDATION_FAILED;
+            // check nullifierHash matches the callData
+            if (nullifierHash != signals[0]) return SIG_VALIDATION_FAILED;
+            // check nullifierHash has not been used already
+            if (nullifiers[nullifierHash] == true)  return SIG_VALIDATION_FAILED;
+            // check oldRoot 
+            if (tree.root != signals[1])  return SIG_VALIDATION_FAILED;
+            // check newRoot matches the callData
+            if (root != signals[3])  return SIG_VALIDATION_FAILED;
+            // check callData hash matches the hash of calldata
+            uint256 hash = uint(keccak256(userOp.callData));
+            if (hash != signals[5])  return SIG_VALIDATION_FAILED;
+            // check the proof
+            bool res = _verifier.verifyProof(pi_a, pi_b, pi_c, signals);
+            console.log(res);
+            if (!res) return SIG_VALIDATION_FAILED;
+            // finally
+            return 0;
+        }
     }
+    
+    function _onlyOwner() internal view {
+         //directly from EOA owner, or through the account itself (which gets redirected through execute())
+         require(msg.sender == owner || msg.sender == address(this), "only owner");
+     }
+    
+     // Require the function call went through EntryPoint or owner
+     function _onlyEntryPointOrOwner() internal view {
+         require(msg.sender == address(entryPoint()) || msg.sender == owner, "account: not Owner or EntryPoint");
+     }
 
-    function _call(address target, uint256 value, bytes memory data) internal {
-        (bool success, bytes memory result) = target.call{value : value}(data);
+    /**
+     * execute a transaction (called directly from owner, or by entryPoint)
+     */
+    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, address dest, bytes calldata data) external {
+        _onlyEntryPointOrOwner();
+        nullifiers[nullifierHash] = true;
+        tree.insert(commitmentHash);
+        require(root == tree.root);
+        (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
             assembly {
                 revert(add(result, 32), mload(result))
             }
-        }
+        } 
     }
 
     /**
@@ -133,7 +145,8 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
      * @param withdrawAddress target to send to
      * @param amount to withdraw
      */
-    function withdrawDepositTo(address payable withdrawAddress, uint256 amount) public onlyOwner {
+    function withdrawDepositTo(address payable withdrawAddress, uint256 amount) public {
+        _onlyOwner();
         entryPoint().withdrawTo(withdrawAddress, amount);
     }
 
