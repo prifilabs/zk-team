@@ -4,19 +4,14 @@ include "../node_modules/circomlib/circuits/poseidon.circom";
 include "./tree.circom";
 
 template InputHasher(levels){
-    signal input nullifier;
     signal input secret;
+    signal input nullifier;
     signal input balance;
     
     signal output commitmentHash;
     component commitmentHasher = Poseidon(3);
     commitmentHasher.inputs <== [nullifier, secret, balance];
     commitmentHash <== commitmentHasher.out;
-    
-    signal output nullifierHash;
-    component nullifierHasher = Poseidon(1);
-    nullifierHasher.inputs <== [nullifier];
-    nullifierHash <== nullifierHasher.out;
     
     signal input treeSiblings[levels];
     signal input treePathIndices[levels];
@@ -45,33 +40,32 @@ template Transact(levels) {
     signal output newCommitmentHash;
     signal output newRoot;
     
-    // new private values
+    // private old input values
     signal input oldBalance;
     signal input oldNullifier;
     signal input oldSecret;
     signal input oldTreeSiblings[levels];
     signal input oldTreePathIndices[levels];
     
-    signal input newBalance;
-    signal input newNullifier;
-    signal input newSecret;
-    signal input newTreeSiblings[levels];
-    signal input newTreePathIndices[levels]; 
-    
-    // check balances
-    assert(value >= 0);
-    assert(oldBalance >= value);
-    assert(newBalance == oldBalance - value);
-    
     component oldInputHasher = InputHasher(levels);
     oldInputHasher.nullifier <== oldNullifier;
     oldInputHasher.secret <== oldSecret;
     oldInputHasher.balance <== oldBalance;
     oldInputHasher.treeSiblings <== oldTreeSiblings;
-    oldInputHasher.treePathIndices <== oldTreePathIndices;   
+    oldInputHasher.treePathIndices <== oldTreePathIndices;
     
-    oldNullifierHash <== oldInputHasher.nullifierHash;
+    component nullifierHasher = Poseidon(1);
+    nullifierHasher.inputs <== [oldNullifier];    
+    oldNullifierHash <== nullifierHasher.out;
     oldRoot <== oldInputHasher.root;
+    
+    // private new input values
+    
+    signal input newBalance;
+    signal input newNullifier;
+    signal input newSecret;
+    signal input newTreeSiblings[levels];
+    signal input newTreePathIndices[levels]; 
     
     component newInputHasher = InputHasher(levels);
     newInputHasher.nullifier <== newNullifier;
@@ -83,14 +77,21 @@ template Transact(levels) {
     newCommitmentHash <== newInputHasher.commitmentHash;    
     newRoot <== newInputHasher.root; 
     
+    // asserts
+    
+    assert(value >= 0);
+    assert(oldBalance >= value);
+    assert(newBalance >= 0);
+    assert(newBalance <= oldBalance - value);          
+    
     // hidden signals to prevent tampering
+    
     signal callDataHashSquared;
     callDataHashSquared <== callDataHash * callDataHash;
-    
 }
 
 // Public inputs: value, callDataHash
 // Outputs: oldNullifierHash, oldRoot, newCommitmentHash, newRoot
-// Private inputs: oldBalance, oldNullifier, oldSecret, oldMerkleProof (oldTreeSiblings + oldTreePathIndices), newBalance, newNullifier, newSecret, newMerkleProof (newTreeSiblings + newTreePathIndices)
+// Private inputs: secretHash, oldBalance, oldNullifier, oldSecret, oldMerkleProof (oldTreeSiblings + oldTreePathIndices), newBalance, newSecret, newMerkleProof (newTreeSiblings + newTreePathIndices)
 
 component main {public [value, callDataHash]} = Transact(20);

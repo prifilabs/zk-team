@@ -23,7 +23,7 @@ async function deployHardhat(){
         
         // console.log(params);
         
-        const op = await account.createSignedUserOp(params);
+        const op = await account.createUserOp(params);
         
         // console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
         
@@ -42,7 +42,7 @@ async function deployLocal(){
     const bundlerAddress = "0xf39Fd6e51aad88F6F4ce6aB8827279cffFb92266";
     const sendUserOp = async function(account, params){
         
-        const op = await account.createSignedUserOp(params);
+        const op = await account.createUserOp(params);
         
         // console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
         
@@ -161,6 +161,7 @@ describe("ERC-4337 Account Abstraction", function () {
       await config.sendUserOp(zkTeamAccount, {
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]),
+          signature: '0x'
       });
       
       // console.log(
@@ -217,6 +218,7 @@ describe("ERC-4337 Account Abstraction", function () {
       await config.sendUserOp(zkTeamAccount, {
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
+          signature: '0x',
       });      
       
       // console.log(

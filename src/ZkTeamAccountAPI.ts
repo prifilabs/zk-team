@@ -256,7 +256,7 @@ export class ZkTeamAccountAPI {
    * - if gas or nonce are missing, read them from the chain (note that we can't fill gaslimit before the account is created)
    * @param info
    */
-  async createUnsignedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
+  async createUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
     const {
       callData,
       callGasLimit
@@ -306,29 +306,8 @@ export class ZkTeamAccountAPI {
     return {
       ...partialUserOp,
       preVerificationGas: this.getPreVerificationGas(partialUserOp),
-      signature: ''
+      signature: info.signature,
     }
-  }
-
-  /**
-   * Sign the filled userOp.
-   * @param userOp the UserOperation to sign (with signature field ignored)
-   */
-  async signUserOp (userOp: UserOperationStruct): Promise<UserOperationStruct> {
-    const userOpHash = await this.getUserOpHash(userOp)
-    const signature = await this.owner.signMessage(arrayify(userOpHash))
-    return {
-      ...userOp,
-      signature
-    }
-  }
-
-  /**
-   * helper method: create and sign a user operation.
-   * @param info transaction details for the userOp
-   */
-  async createSignedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
-    return await this.signUserOp(await this.createUnsignedUserOp(info))
   }
 
   /**

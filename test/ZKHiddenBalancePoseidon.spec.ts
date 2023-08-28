@@ -13,14 +13,13 @@ import { poseidon1, poseidon2, poseidon3 } from "poseidon-lite"
 function generateValues(tree, balance){
     const nullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
     const secret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
-    const nullifierHash = poseidon1([nullifier]);
     const commitmentHash = poseidon3([nullifier, secret, balance]);
     tree.insert(commitmentHash);
     const proof = tree.createProof(tree.indexOf(commitmentHash));
     const siblings = proof.siblings.map( (s) => s[0]); 
     const pathIndices = proof.pathIndices;
     const root = proof.root;
-    return { nullifier, secret, nullifierHash, commitmentHash, siblings, pathIndices, root }
+    return { nullifier, secret, commitmentHash, siblings, pathIndices, root }
 }
 
 function generateSignals(value, oldBalance, newBalance){
@@ -45,7 +44,7 @@ function generateSignals(value, oldBalance, newBalance){
     };
     
     const outputs = {
-        oldNullifierHash: oldValues.nullifierHash,
+        oldNullifierHash: poseidon1([oldValues.nullifier]),
         oldRoot: oldValues.root,
         newCommitmentHash: newValues.commitmentHash,
         newRoot: newValues.root,
