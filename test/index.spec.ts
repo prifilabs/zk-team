@@ -12,8 +12,10 @@ import { ZkTeamAccountAPI } from "../src/ZkTeamAccountAPI";
 
 import { DefaultGasOverheads } from "@account-abstraction/sdk";
 
-import { proxy, PoseidonT3 } from "poseidon-solidity";
-import { poseidon3 } from "poseidon-lite"
+import { proxy, PoseidonT2, PoseidonT3 } from "poseidon-solidity";
+
+import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
+import { poseidon1, poseidon2, poseidon3 } from "poseidon-lite"
 
 async function deployHardhat(){
     const EntryPointFactory = await ethers.getContractFactory(EntryPoint.abi, EntryPoint.bytecode);
@@ -79,13 +81,20 @@ async function deployPoseidon(){
         data: PoseidonT3.data
       })
     }
+    
+    if (await ethers.provider.getCode(PoseidonT2.address) === '0x') {
+      await sender.sendTransaction({
+        to: proxy.address,
+        data: PoseidonT2.data
+      })
+    }
 }
 
-describe.only("ERC-4337 Account Abstraction", function () {
+describe("ERC-4337 Account Abstraction", function () {
     
     let config;
   
-    it.only("Should deploy the framework", async function () { 
+    it("Should deploy the framework", async function () { 
         const chainId = (await hre.ethers.provider.getNetwork()).chainId;
     
         let init = (chainId == 1337)? await deployLocal() :  await deployHardhat() ;
@@ -107,6 +116,7 @@ describe.only("ERC-4337 Account Abstraction", function () {
         const zkTeamAccountFactoryFactory = await ethers.getContractFactory("ZkTeamAccountFactory", {        
             libraries: {
                 IncrementalBinaryTree: incrementalBinaryTreeLib.address,
+                PoseidonT2: PoseidonT2.address
         }});
                 
         const zkTeamAccountFactory = await zkTeamAccountFactoryFactory.deploy(init.entryPointAddress, zkHiddenBalancePoseidonVerifier.address);
@@ -125,11 +135,13 @@ describe.only("ERC-4337 Account Abstraction", function () {
         const greeter = await Greeter.deploy("Hello World!");
 
         expect(await greeter.greet()).to.equal("Hello World!");
+        
+        const tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, [42]);
 
-        config = { ...init, greeter, zkTeamAccountFactory, owner }
+        config = { ...init, greeter, zkTeamAccountFactory, owner, tree }
     })  
     
-  it.only("Should allow the admin to sign a transaction (without Paymaster)", async function () {
+  it("Should allow the admin to sign a transaction (without Paymaster)", async function () {
                
       const zkTeamAccount = new ZkTeamAccountAPI({
           provider: ethers.provider,
@@ -139,14 +151,18 @@ describe.only("ERC-4337 Account Abstraction", function () {
           provider: ethers.provider,
           index: 0,
       });
+            
+      const oldNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const oldNullifierHash  = poseidon1([oldNullifier]);
+      
+      const newBalance = ethers.utils.parseEther("10").toBigInt();
+      const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const newCommitmentHash = poseidon3([newNullifier, newSecret, newBalance]);
+      config.tree.insert(newCommitmentHash);
+      const newRoot = config.tree.root;
 
-      const privateInputs = {
-          oldNullifier: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt(),
-          newBalance: ethers.utils.parseEther("10").toBigInt(),
-          newNullifier: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt(),
-          newSecret: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt(),
-          leaves: [42],
-      };
+      const privateInputs = { oldNullifierHash, newCommitmentHash, newRoot };
       
       const op = await zkTeamAccount.createSignedUserOp({
           ...privateInputs,
@@ -161,15 +177,14 @@ describe.only("ERC-4337 Account Abstraction", function () {
                   
       config = { 
           ...config, 
-          balance: privateInputs.newBalance, 
-          nullifier: privateInputs.newNullifier, 
-          secret: privateInputs.newSecret, 
-          leaves: privateInputs.leaves
+          balance: newBalance, 
+          nullifier: newNullifier, 
+          secret: newSecret,
       }; 
   })
   
-  it.only("Should allow any user to prove a transaction (without Paymaster)", async function () {
-               
+  it("Should allow any user to prove a transaction (without Paymaster)", async function () {
+                           
       const zkTeamAccount = new ZkTeamAccountAPI({
           provider: ethers.provider,
           entryPointAddress: config.entryPointAddress,
@@ -178,16 +193,45 @@ describe.only("ERC-4337 Account Abstraction", function () {
           provider: ethers.provider,
           index: 0,
       });
+      
+      const value = ethers.utils.parseEther("2.5").toBigInt();
+      
+      const oldBalance = config.balance; // should be 10;
+      const oldNullifier = config.nullifier;
+      const oldSecret = config.secret;
+      const oldNullifierHash  = poseidon1([oldNullifier]);
+      const oldCommitmentHash = poseidon3([oldNullifier, oldSecret, oldBalance]);  
+      const oldRoot = config.tree.root;
+      const oldMerkleProof = config.tree.createProof(config.tree.indexOf(oldCommitmentHash));
+      const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]);
+      const oldTreePathIndices = oldMerkleProof.pathIndices;
+      
+      const newBalance = ethers.utils.parseEther("7.5").toBigInt();
+      const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const newCommitmentHash = poseidon3([newNullifier, newSecret, newBalance]);
+      config.tree.insert(newCommitmentHash);
+      const newRoot = config.tree.root;
+      const newMerkleProof = config.tree.createProof(config.tree.indexOf(newCommitmentHash));
+      const newTreeSiblings = newMerkleProof.siblings.map( (s) => s[0]);
+      const newTreePathIndices = newMerkleProof.pathIndices;
 
       const privateInputs = {
-          value: ethers.utils.parseEther("2.5").toBigInt(),
-          oldBalance: config.balance,
-          oldNullifier: config.nullifier,
-          oldSecret: config.secret,
-          newBalance: ethers.utils.parseEther("7.5").toBigInt(),
-          newNullifier: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt(),
-          newSecret: ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt(),
-          leaves: config.leaves,
+          value,
+          oldBalance,
+          oldNullifier,
+          oldSecret,
+          oldNullifierHash,
+          oldRoot,
+          oldTreeSiblings,
+          oldTreePathIndices,
+          newBalance,
+          newNullifier,
+          newSecret,
+          newCommitmentHash,
+          newRoot,
+          newTreeSiblings,
+          newTreePathIndices,
       };
             
       const op = await zkTeamAccount.createProvedUserOp({
@@ -199,14 +243,13 @@ describe.only("ERC-4337 Account Abstraction", function () {
 
       await config.sendUserOp(zkTeamAccount, op);
       
-      expect(await config.greeter.greet()).to.equal("Hola Mundo!");
+      expect(await config.greeter.greet()).to.equal("Hallo Welt!");
             
       config = { 
           ...config, 
           balance: privateInputs.newBalance, 
           nullifier: privateInputs.newNullifier, 
           secret: privateInputs.newSecret, 
-          leaves: config.leaves
       };      
   })
   
@@ -237,13 +280,54 @@ describe.only("ERC-4337 Account Abstraction", function () {
           paymasterAPI: verifyingPaymasterApi,
           provider: ethers.provider,
       });
+      
+      const value = ethers.utils.parseEther("3").toBigInt();
+      
+      const oldBalance = config.balance; // should be 7.5;
+      const oldNullifier = config.nullifier;
+      const oldSecret = config.secret;
+      const oldNullifierHash  = poseidon1([oldNullifier]);
+      const oldCommitmentHash = poseidon3([oldNullifier, oldSecret, oldBalance]);  
+      const oldRoot = config.tree.root;
+      const oldMerkleProof = config.tree.createProof(config.tree.indexOf(oldCommitmentHash));
+      const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]);
+      const oldTreePathIndices = oldMerkleProof.pathIndices;
+      
+      const newBalance = ethers.utils.parseEther("4.5").toBigInt();
+      const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
+      const newCommitmentHash = poseidon3([newNullifier, newSecret, newBalance]);
+      config.tree.insert(newCommitmentHash);
+      const newRoot = config.tree.root;
+      const newMerkleProof = config.tree.createProof(config.tree.indexOf(newCommitmentHash));
+      const newTreeSiblings = newMerkleProof.siblings.map( (s) => s[0]);
+      const newTreePathIndices = newMerkleProof.pathIndices;
 
-      const op = await zkTeamAccount.createUnsignedUserOp({
+      const privateInputs = {
+          value,
+          oldBalance,
+          oldNullifier,
+          oldSecret,
+          oldNullifierHash,
+          oldRoot,
+          oldTreeSiblings,
+          oldTreePathIndices,
+          newBalance,
+          newNullifier,
+          newSecret,
+          newCommitmentHash,
+          newRoot,
+          newTreeSiblings,
+          newTreePathIndices,
+      };
+
+            
+      const op = await zkTeamAccount.createProvedUserOp({
+          ...privateInputs,
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
+          gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
       });
-      
-      op.signature = '0x';
 
       await config.sendUserOp(zkTeamAccount, op);  
             

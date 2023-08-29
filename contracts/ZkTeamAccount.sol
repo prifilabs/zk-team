@@ -16,6 +16,7 @@ import "hardhat/console.sol";
 import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
 
 import "./verifier.sol";
+import "poseidon-solidity/PoseidonT2.sol";
 
 /**
   * minimal account.
@@ -89,11 +90,10 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             // check newRoot matches the callData
             if (root != signals[3])  return SIG_VALIDATION_FAILED;
             // check callData hash matches the hash of calldata
-            uint256 hash = uint(keccak256(userOp.callData));
+            uint hash = PoseidonT2.hash([uint(keccak256(userOp.callData))]);
             if (hash != signals[5])  return SIG_VALIDATION_FAILED;
             // check the proof
             bool res = _verifier.verifyProof(pi_a, pi_b, pi_c, signals);
-            console.log(res);
             if (!res) return SIG_VALIDATION_FAILED;
             // finally
             return 0;
