@@ -32,7 +32,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     using IncrementalBinaryTree for IncrementalTreeData;
     IncrementalTreeData public tree;
     
-    mapping(uint256 => bool) public nullifiers;
+    mapping(uint256 => bytes32) public nullifiers;
 
     IEntryPoint private immutable _entryPoint;
     Groth16Verifier private immutable _verifier;
@@ -84,7 +84,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             // check nullifierHash matches the callData
             if (nullifierHash != signals[0]) return SIG_VALIDATION_FAILED;
             // check nullifierHash has not been used already
-            if (nullifiers[nullifierHash] == true)  return SIG_VALIDATION_FAILED;
+            if (nullifiers[nullifierHash] != bytes32(0))  return SIG_VALIDATION_FAILED;
             // check oldRoot 
             if (tree.root != signals[1])  return SIG_VALIDATION_FAILED;
             // check newRoot matches the callData
@@ -113,9 +113,9 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     /**
      * execute a transaction (called directly from owner, or by entryPoint)
      */
-    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, address dest, bytes calldata data) external {
+    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, bytes32 balanceEncrypted, address dest, bytes calldata data) external {
         _onlyEntryPointOrOwner();
-        nullifiers[nullifierHash] = true;
+        nullifiers[nullifierHash] = balanceEncrypted;
         tree.insert(commitmentHash);
         require(root == tree.root);
         (bool success, bytes memory result) = dest.call{value : value}(data);

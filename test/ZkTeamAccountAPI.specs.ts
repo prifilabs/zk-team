@@ -148,7 +148,6 @@ describe("ERC-4337 Account Abstraction", function () {
           entryPointAddress: config.entryPointAddress,
           owner: config.owner,
           factoryAddress: config.zkTeamAccountFactory.address,
-          provider: ethers.provider,
           index: 0,
       });
             
@@ -166,6 +165,7 @@ describe("ERC-4337 Account Abstraction", function () {
       
       const op = await zkTeamAccount.createSignedUserOp({
           ...privateInputs,
+          balanceEncrypted: ethers.utils.formatBytes32String("1"),
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
@@ -176,7 +176,7 @@ describe("ERC-4337 Account Abstraction", function () {
       expect(await config.greeter.greet()).to.equal("Hola Mundo!");
                   
       config = { 
-          ...config, 
+          ...config,
           balance: newBalance, 
           nullifier: newNullifier, 
           secret: newSecret,
@@ -190,7 +190,6 @@ describe("ERC-4337 Account Abstraction", function () {
           entryPointAddress: config.entryPointAddress,
           owner: config.owner,
           factoryAddress: config.zkTeamAccountFactory.address,
-          provider: ethers.provider,
           index: 0,
       });
       
@@ -236,6 +235,7 @@ describe("ERC-4337 Account Abstraction", function () {
             
       const op = await zkTeamAccount.createProvedUserOp({
           ...privateInputs,
+          balanceEncrypted: ethers.utils.formatBytes32String("1"),
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hallo Welt!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
@@ -278,7 +278,6 @@ describe("ERC-4337 Account Abstraction", function () {
           factoryAddress: config.zkTeamAccountFactory.address,
           overheads: {zeroByte: DefaultGasOverheads.nonZeroByte},
           paymasterAPI: verifyingPaymasterApi,
-          provider: ethers.provider,
       });
       
       const value = ethers.utils.parseEther("3").toBigInt();
@@ -324,6 +323,7 @@ describe("ERC-4337 Account Abstraction", function () {
             
       const op = await zkTeamAccount.createProvedUserOp({
           ...privateInputs,
+          balanceEncrypted: ethers.utils.formatBytes32String("1"),
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function

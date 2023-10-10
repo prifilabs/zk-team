@@ -216,7 +216,7 @@ export class ZkTeamAccountAPI {
    * @param value
    * @param data
    */
-  async encodeExecute (nullifierHash: BigNumberish, commitmentHash: BigNumberish, root: BigNumberish, value: BigNumberish,  target: string, data: string): Promise<string> {
+  async encodeExecute (nullifierHash: BigNumberish, commitmentHash: BigNumberish, root: BigNumberish, balanceEncrypted: string, value: BigNumberish,  target: string, data: string): Promise<string> {
     const accountContract = await this._getAccountContract()
     return accountContract.interface.encodeFunctionData(
       'execute',
@@ -224,6 +224,7 @@ export class ZkTeamAccountAPI {
         nullifierHash,
         commitmentHash,
         root,
+        balanceEncrypted,
         value,
         target,
         data
@@ -237,8 +238,8 @@ export class ZkTeamAccountAPI {
     }
     
     const value = parseNumber(detailsForUserOp.value) ?? BigNumber.from(0)
-    
-    const callData = await this.encodeExecute(detailsForUserOp.oldNullifierHash, detailsForUserOp.newCommitmentHash, detailsForUserOp.newRoot, value, detailsForUserOp.target, detailsForUserOp.data)
+        
+    const callData = await this.encodeExecute(detailsForUserOp.oldNullifierHash, detailsForUserOp.newCommitmentHash, detailsForUserOp.newRoot, value, detailsForUserOp.balanceEncrypted, detailsForUserOp.target, detailsForUserOp.data)
     const callGasLimit = parseNumber(detailsForUserOp.gasLimit) ?? await this.provider.estimateGas({
       from: this.entryPointAddress,
       to: this.getAccountAddress(),
@@ -351,6 +352,7 @@ export class ZkTeamAccountAPI {
         
         let userOp = await this.createUnsignedUserOp(info);
 
+        // interstingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
         const callDataHash = poseidon1([BigNumber.from(ethers.utils.keccak256(userOp.callData)).toBigInt()]);
 
         const inputs = {

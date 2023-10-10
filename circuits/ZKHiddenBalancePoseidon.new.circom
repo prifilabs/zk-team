@@ -33,12 +33,13 @@ template Transact(levels) {
     // public input values
     signal input value;
     signal input callDataHash;
+    signal input adminHash;
+    signal input oldRoot;
     
     // public output values
-    signal output oldNullifierHash;
-    signal output oldRoot;
-    signal output newCommitmentHash;
-    signal output newRoot;
+    signal output nullifierHash;
+    signal output commitmentHash;
+    signal output root;
     
     // private old input values
     signal input oldBalance;
@@ -47,17 +48,16 @@ template Transact(levels) {
     signal input oldTreeSiblings[levels];
     signal input oldTreePathIndices[levels];
     
+    component nullifierHasher = Poseidon(1);
+    nullifierHasher.inputs <== [oldNullifier];
+    nullifierHash <== nullifierHasher.out;
+    
     component oldInputHasher = InputHasher(levels);
     oldInputHasher.nullifier <== oldNullifier;
     oldInputHasher.secret <== oldSecret;
     oldInputHasher.balance <== oldBalance;
     oldInputHasher.treeSiblings <== oldTreeSiblings;
     oldInputHasher.treePathIndices <== oldTreePathIndices;
-    
-    component nullifierHasher = Poseidon(1);
-    nullifierHasher.inputs <== [oldNullifier];    
-    oldNullifierHash <== nullifierHasher.out;
-    oldRoot <== oldInputHasher.root;
     
     // private new input values
     
@@ -74,14 +74,23 @@ template Transact(levels) {
     newInputHasher.treeSiblings <== newTreeSiblings;
     newInputHasher.treePathIndices <== newTreePathIndices;
 
-    newCommitmentHash <== newInputHasher.commitmentHash;    
-    newRoot <== newInputHasher.root; 
+    commitmentHash <== newInputHasher.commitmentHash;    
+    root <== newInputHasher.root; 
     
     // asserts
     
     assert(value >= 0);
     assert(oldBalance >= value);
-    assert(newBalance == oldBalance - value);          
+    
+    component adminHasher = Poseidon(1);
+    adminHasher.inputs <== [oldSecret];
+    
+    if (adminHasher.out == adminHash) {
+       assert(newBalance >= 0);
+    } else {
+       assert(newBalance == oldBalance - value);          
+       assert(oldRoot == oldInputHasher.root);
+    }
     
     // hidden signals to prevent tampering
     
@@ -89,8 +98,8 @@ template Transact(levels) {
     callDataHashSquared <== callDataHash * callDataHash;
 }
 
-// Public inputs: value, callDataHash
-// Outputs: oldNullifierHash, oldRoot, newCommitmentHash, newRoot
+// Public inputs: adminHash, oldRoot, value, callDataHash
+// Outputs: (old) nullifierHash, (new) commitmentHash, root
 // Private inputs: secretHash, oldBalance, oldNullifier, oldSecret, oldMerkleProof (oldTreeSiblings + oldTreePathIndices), newBalance, newSecret, newMerkleProof (newTreeSiblings + newTreePathIndices)
 
-component main {public [value, callDataHash]} = Transact(20);
+component main {public [adminHash, oldRoot, value, callDataHash]} = Transact(20);
