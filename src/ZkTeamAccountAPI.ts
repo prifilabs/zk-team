@@ -82,7 +82,7 @@ export class ZkTeamAccountAPI {
     return this
   }
 
-  async _getAccountContract (): Promise<ethers.contract> {
+  async getAccountContract (): Promise<ethers.contract> {
     if (this.accountContract == null) {
        this.accountContract = new Contract(await this.getAccountAddress(), ZkTeamAccount.abi, this.provider);
     }
@@ -174,7 +174,7 @@ export class ZkTeamAccountAPI {
     if (await this.checkAccountPhantom()) {
       return BigNumber.from(0)
     }
-    const accountContract = await this._getAccountContract()
+    const accountContract = await this.getAccountContract()
     return await accountContract.getNonce()
   }
   
@@ -217,7 +217,7 @@ export class ZkTeamAccountAPI {
    * @param data
    */
   async encodeExecute (nullifierHash: BigNumberish, commitmentHash: BigNumberish, root: BigNumberish, balanceEncrypted: string, value: BigNumberish,  target: string, data: string): Promise<string> {
-    const accountContract = await this._getAccountContract()
+    const accountContract = await this.getAccountContract()
     return accountContract.interface.encodeFunctionData(
       'execute',
       [

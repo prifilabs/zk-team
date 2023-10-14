@@ -36,8 +36,11 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
 
     IEntryPoint private immutable _entryPoint;
     Groth16Verifier private immutable _verifier;
+    uint256 private immutable _depth = 20;
 
+    event CommitmentHashInserted(uint256 commitmentHash);
     event ZkTeamAccountInitialized(IEntryPoint indexed entryPoint, address indexed owner);
+
 
     /// @inheritdoc BaseAccount
     function entryPoint() public view virtual override returns (IEntryPoint) {
@@ -61,8 +64,9 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
      */
     function initialize(address anOwner) public virtual initializer {
         owner = anOwner;
-        tree.init(20, 0);
+        tree.init(_depth, 0);
         tree.insert(42); // Bug: I have no clue why it does not work without this first insert
+        emit CommitmentHashInserted(42);
         emit ZkTeamAccountInitialized(_entryPoint, owner);
     }
     
@@ -117,13 +121,14 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         _onlyEntryPointOrOwner();
         nullifiers[nullifierHash] = balanceEncrypted;
         tree.insert(commitmentHash);
+        emit CommitmentHashInserted(commitmentHash);
         require(root == tree.root);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
             assembly {
                 revert(add(result, 32), mload(result))
             }
-        } 
+        }
     }
 
     /**
