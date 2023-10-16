@@ -143,7 +143,7 @@ describe("ERC-4337 Account Abstraction", function () {
           newTreeSiblings,
           newTreePathIndices,
       };
-            
+                  
       const op = await zkTeamAccount.createProvedUserOp({
           ...privateInputs,
           balanceEncrypted: ethers.utils.formatBytes32String("1"),
@@ -151,7 +151,9 @@ describe("ERC-4337 Account Abstraction", function () {
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hallo Welt!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
       });
-
+      
+      // console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
+      
       await config.sendUserOp(op);
       
       expect(await config.greeter.greet()).to.equal("Hallo Welt!");

@@ -72,7 +72,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     
     /// implement template method of BaseAccount
     function _validateSignature(UserOperation calldata userOp, bytes32 userOpHash)
-    internal override virtual returns (uint256 validationData) {
+    internal override virtual returns (uint256 validationData) {        
         if (userOp.signature.length == 65){
             bytes32 hash = userOpHash.toEthSignedMessageHash();
             if (owner != hash.recover(userOp.signature))
