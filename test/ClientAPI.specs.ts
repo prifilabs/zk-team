@@ -4,9 +4,9 @@ import { ethers } from "hardhat";
 
 import { deployEntrypointAndBundlerHardhat, deployEntrypointAndBundlerHardhat, deployPoseidon, deployZkTeamFactory } from "../src/deploy";
 
-import { ZkTeamClientAdmin } from "../src/ClientAPI";
+import { ZkTeamClientAdmin, getAccount, getAccounts } from "../src/ClientAPI";
 
-describe("ERC-4337 Account Abstraction", function () {
+describe.only("ERC-4337 Account Abstraction", function () {
     
     let context;
   
@@ -46,7 +46,7 @@ describe("ERC-4337 Account Abstraction", function () {
      
      const balance = ethers.utils.parseEther("100").toBigInt();
      
-     const txHash = await adminClient.setUserBalance(0, balance);
+     const txHash = await adminClient.setAllowance(0, balance);
      // console.log(`Transaction hash: ${txHash}`);
      
      expect(await adminClient.checkAccountPhantom()).to.be.false;
@@ -58,8 +58,26 @@ describe("ERC-4337 Account Abstraction", function () {
      const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
      const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
           
-     const balance = await adminClient.getUserBalance(0);     
+     const balance = await adminClient.getAllowance(0);     
      expect(balance).to.be.equal(ethers.utils.parseEther("100").toBigInt());
+        
+  })
+  
+  it("Should allow the admin to get the balance for multiple accounts", async function () {
+                        
+     const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
+     const balances =  await getAccounts(ethers.provider, context.config.factoryAddress, await context.owner.getAddress(), 0, 5);
+     console.log(balances);
+  })
+        
+  
+  it("Should allow the admin to get the allowance for multiple users", async function () {
+                        
+     const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
+     const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
+          
+     const allowances = await adminClient.getAllowances(0, 5);     
+     console.log(allowances);
         
   })
   

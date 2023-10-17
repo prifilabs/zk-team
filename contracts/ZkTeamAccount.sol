@@ -32,13 +32,13 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     using IncrementalBinaryTree for IncrementalTreeData;
     IncrementalTreeData public tree;
     
-    mapping(uint256 => bytes32) public nullifiers;
+    mapping(uint256 => bytes32) public nullifierHashes;
 
     IEntryPoint private immutable _entryPoint;
     Groth16Verifier private immutable _verifier;
     uint256 private immutable _depth = 20;
 
-    event CommitmentHashInserted(uint256 commitmentHash);
+    event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash);
     event ZkTeamAccountInitialized(IEntryPoint indexed entryPoint, address indexed owner);
 
 
@@ -66,7 +66,6 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         owner = anOwner;
         tree.init(_depth, 0);
         tree.insert(42); // Bug: I have no clue why it does not work without this first insert
-        emit CommitmentHashInserted(42);
         emit ZkTeamAccountInitialized(_entryPoint, owner);
     }
     
@@ -88,7 +87,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             // check nullifierHash matches the callData
             if (nullifierHash != signals[0]) return SIG_VALIDATION_FAILED;
             // check nullifierHash has not been used already
-            if (nullifiers[nullifierHash] != bytes32(0))  return SIG_VALIDATION_FAILED;
+            if (nullifierHashes[nullifierHash] != bytes32(0))  return SIG_VALIDATION_FAILED;
             // check oldRoot 
             if (tree.root != signals[1])  return SIG_VALIDATION_FAILED;
             // check newRoot matches the callData
@@ -119,9 +118,9 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
      */
     function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, bytes32 balanceEncrypted, address dest, bytes calldata data) external {
         _onlyEntryPointOrOwner();
-        nullifiers[nullifierHash] = balanceEncrypted;
+        nullifierHashes[nullifierHash] = balanceEncrypted;
         tree.insert(commitmentHash);
-        emit CommitmentHashInserted(commitmentHash);
+        emit ZkTeamExecution(nullifierHash, commitmentHash);
         require(root == tree.root);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
