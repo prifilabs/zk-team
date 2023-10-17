@@ -2,11 +2,11 @@ import { expect } from 'chai'
 
 import { ethers } from "hardhat";
 
-import { deployEntrypointAndBundlerHardhat, deployEntrypointAndBundlerHardhat, deployPoseidon, deployZkTeamFactory } from "../src/deploy";
+import { deployEntrypointAndBundlerHardhat, deployEntrypointAndBundlerHardhat, deployPoseidon, deployZkTeamFactory } from "../src/Deploy";
 
 import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "../src/ClientAPI";
 
-describe.only("ERC-4337 Account Abstraction", function () {
+describe("ZkTeam Admin/Client API", function () {
     
     let context;
   

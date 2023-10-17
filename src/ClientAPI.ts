@@ -132,8 +132,8 @@ class ZkTeamClient extends ZkTeamAccountAPI {
         while(true){
             const nullifier = ethers.BigNumber.from(key.derivePath(`${index}/1`).privateKey).toBigInt();
             const nullifierHash  = poseidon1([nullifier]);
-            const balance = await accountContract.nullifierHashes(nullifierHash);
-            if (balance === ethers.constants.HashZero) break;
+            const encryptedAllowance = await accountContract.nullifierHashes(nullifierHash);
+            if (encryptedAllowance === ethers.constants.HashZero) break;
             index++;
         }
         return index;
@@ -143,8 +143,8 @@ class ZkTeamClient extends ZkTeamAccountAPI {
         const { n, k, i } = ZkTeamClient.generateTriplet(key, index);
         const nullifierHash  = poseidon1([n]);
         const accountContract = await this.getAccountContract()
-        const encryptedBalance = await accountContract.nullifierHashes(nullifierHash);
-        return ZkTeamClient.decryptAllowance(encryptedBalance, k, i);
+        const encryptedAllowance = await accountContract.nullifierHashes(nullifierHash);
+        return ZkTeamClient.decryptAllowance(encryptedAllowance, k, i);
     }
     
     protected async getAllowance(key){
@@ -174,24 +174,24 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
         return Promise.all(tasks);
     }
     
-    public async setAllowance(userIndex, newAllowance, padding?){
-        const newBalance = ethers.BigNumber.from(newAllowance).toBigInt();
+    public async setAllowance(userIndex, rawNewAllowance, padding?){
+        const newAllowance = ethers.BigNumber.from(rawNewAllowance).toBigInt();
         
         const userKey = this.key.derivePath(`m/${this.index}/${userIndex}'`);
         const index = await this.getLastIndex(userKey);
         const oldTriplet = ZkTeamClient.generateTriplet(userKey, index);
         const newTriplet = ZkTeamClient.generateTriplet(userKey, index+1);        
         const oldNullifierHash  = poseidon1([oldTriplet.n]);
-        const newCommitmentHash = poseidon3([newTriplet.n, newTriplet.s, newBalance]);
+        const newCommitmentHash = poseidon3([newTriplet.n, newTriplet.s, newAllowance]);
         const merkleTree = await this.getUpdatedMerkleTree();
         await ZkTeamClient.insertMerkleTree(merkleTree, newCommitmentHash);
         const newRoot = await ZkTeamClient.getMerkleRoot(merkleTree);
         const privateInputs = { oldNullifierHash, newCommitmentHash, newRoot };
-        const encryptedBalance = ZkTeamClient.encryptAllowance(newBalance, oldTriplet.k, oldTriplet.i, padding);
+        const encryptedAllowance = ZkTeamClient.encryptAllowance(newAllowance, oldTriplet.k, oldTriplet.i, padding);
         
         const op = await this.createSignedUserOp({
             ...privateInputs,
-            balanceEncrypted: encryptedBalance,
+            encryptedAllowance,
             target: await this.getAccountAddress(),
             data: "0x",
             gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
@@ -224,33 +224,33 @@ export class ZkTeamClientUser extends ZkTeamClient {
         
         const oldTriplet = ZkTeamClient.generateTriplet(this.key, index);
         const oldNullifierHash  = poseidon1([oldTriplet.n]);
-        const { allowance: oldBalance } = await this.getAllowanceAtIndex(this.key, index-1);
-        const oldCommitmentHash  = poseidon3([oldTriplet.n, oldTriplet.s, oldBalance]);
+        const { allowance: oldAllowance } = await this.getAllowanceAtIndex(this.key, index-1);
+        const oldCommitmentHash  = poseidon3([oldTriplet.n, oldTriplet.s, oldAllowance]);
                 
         const merkleTree = await this.getUpdatedMerkleTree();        
         const oldRoot = await ZkTeamClient.getMerkleRoot(merkleTree);
         const { treeSiblings:oldTreeSiblings, treePathIndices: oldTreePathIndices} = await ZkTeamClient.getMerkleProof(merkleTree, oldCommitmentHash);
 
         const value = ethers.BigNumber.from(v).toBigInt();
-        const newBalance = oldBalance - value;
-        if (newBalance < 0) throw new Error('Insufficient balance');
+        const newAllowance = oldAllowance - value;
+        if (newAllowance < 0) throw new Error('Insufficient allowance');
         const newTriplet = ZkTeamClient.generateTriplet(this.key, index+1);
         const newNullifierHash  = poseidon1([newTriplet.n]);
-        const newCommitmentHash  = poseidon3([newTriplet.n, newTriplet.s, newBalance]);
+        const newCommitmentHash  = poseidon3([newTriplet.n, newTriplet.s, newAllowance]);
         await ZkTeamClient.insertMerkleTree(merkleTree, newCommitmentHash);
         const newRoot = await ZkTeamClient.getMerkleRoot(merkleTree);
         const { treeSiblings:newTreeSiblings, treePathIndices: newTreePathIndices} = await ZkTeamClient.getMerkleProof(merkleTree, newCommitmentHash);        
         
         const privateInputs = {
             value,
-            oldBalance,
+            oldAllowance,
             oldNullifier: oldTriplet.n,
             oldSecret: oldTriplet.s,
             oldNullifierHash,
             oldRoot,
             oldTreeSiblings,
             oldTreePathIndices,
-            newBalance,
+            newAllowance,
             newNullifier: newTriplet.n,
             newSecret: newTriplet.s,
             newCommitmentHash,
@@ -259,11 +259,11 @@ export class ZkTeamClientUser extends ZkTeamClient {
             newTreePathIndices,
         };
                 
-        const encryptedBalance = ZkTeamClient.encryptAllowance(newBalance, oldTriplet.k, oldTriplet.i, padding);
+        const encryptedAllowance = ZkTeamClient.encryptAllowance(newAllowance, oldTriplet.k, oldTriplet.i, padding);
         
         const op = await this.createProvedUserOp({
             ...privateInputs,
-            balanceEncrypted: encryptedBalance,
+            encryptedAllowance: encryptedAllowance,
             target,
             data,
             gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function

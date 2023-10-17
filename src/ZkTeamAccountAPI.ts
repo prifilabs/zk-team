@@ -97,7 +97,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
             detailsForUserOp.newCommitmentHash,
             detailsForUserOp.newRoot,
             value,
-            detailsForUserOp.balanceEncrypted,
+            detailsForUserOp.encryptedAllowance,
             detailsForUserOp.target,
             detailsForUserOp.data
           ])
@@ -131,12 +131,12 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
 
         const inputs = {
             value: info.value,
-            oldBalance: info.oldBalance,
+            oldAllowance: info.oldAllowance,
             oldNullifier: info.oldNullifier,
             oldSecret: info.oldSecret,
             oldTreeSiblings: info.oldTreeSiblings,
             oldTreePathIndices: info.oldTreePathIndices,
-            newBalance: info.newBalance,
+            newAllowance: info.newAllowance,
             newNullifier: info.newNullifier,
             newSecret: info.newSecret,
             newTreeSiblings: info.newTreeSiblings,
@@ -152,17 +152,17 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
         };
                         
         // These three lines are just for checking the proof
-        const zkHiddenBalancePoseidonCircuit = await wasm_tester(resolve("circuits/ZKHiddenBalancePoseidon.circom"));
-        const witness = await zkHiddenBalancePoseidonCircuit.calculateWitness(inputs);
-        await zkHiddenBalancePoseidonCircuit.assertOut(witness, outputs);
+        const zkHiddenAllowancePoseidonCircuit = await wasm_tester(resolve("circuits/zkteam.circom"));
+        const witness = await zkHiddenAllowancePoseidonCircuit.calculateWitness(inputs);
+        await zkHiddenAllowancePoseidonCircuit.assertOut(witness, outputs);
 
         const { proof, publicSignals } = await groth16.fullProve(
             inputs,
-            "zk-data/ZKHiddenBalancePoseidon_js/ZKHiddenBalancePoseidon.wasm",
-            "zk-data/ZKHiddenBalancePoseidon_0001.zkey",
+            "ptau-data/ZkTeam_js/ZkTeam.wasm",
+            "ptau-data/ZkTeam_0001.zkey",
         );
                 
-        const vKey = JSON.parse(readFileSync("zk-data/verification_key.json"));
+        const vKey = JSON.parse(readFileSync("ptau-data/verification_key.json"));
         let res = await groth16.verify(vKey, publicSignals, proof);
         
         if (!res) throw new Error('Invalid proof');

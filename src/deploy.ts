@@ -72,8 +72,8 @@ export async function deployZkTeamFactory(chainId, entryPointAddress){
 
     await incrementalBinaryTreeLib.deployed()
 
-    const ZKHiddenBalancePoseidonVerifier = await ethers.getContractFactory("Groth16Verifier");
-    const zkHiddenBalancePoseidonVerifier = await ZKHiddenBalancePoseidonVerifier.deploy();
+    const ZkTeamVerifier = await ethers.getContractFactory("Groth16Verifier");
+    const zkTeamVerifier = await ZkTeamVerifier.deploy();
 
     const zkTeamAccountFactoryFactory = await ethers.getContractFactory("ZkTeamAccountFactory", {        
         libraries: {
@@ -81,5 +81,5 @@ export async function deployZkTeamFactory(chainId, entryPointAddress){
             PoseidonT2: PoseidonT2.address
     }});
             
-    return zkTeamAccountFactoryFactory.deploy(entryPointAddress, zkHiddenBalancePoseidonVerifier.address);
+    return zkTeamAccountFactoryFactory.deploy(entryPointAddress, zkTeamVerifier.address);
 }

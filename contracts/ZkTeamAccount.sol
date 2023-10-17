@@ -15,7 +15,7 @@ import "@account-abstraction/contracts/samples/callback/TokenCallbackHandler.sol
 import "hardhat/console.sol";
 import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
 
-import "./verifier.sol";
+import "./ZkTeamVerifier.sol";
 import "poseidon-solidity/PoseidonT2.sol";
 
 /**
@@ -116,9 +116,9 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     /**
      * execute a transaction (called directly from owner, or by entryPoint)
      */
-    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, bytes32 balanceEncrypted, address dest, bytes calldata data) external {
+    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, bytes32 encryptedAllowance, address dest, bytes calldata data) external {
         _onlyEntryPointOrOwner();
-        nullifierHashes[nullifierHash] = balanceEncrypted;
+        nullifierHashes[nullifierHash] = encryptedAllowance;
         tree.insert(commitmentHash);
         emit ZkTeamExecution(nullifierHash, commitmentHash);
         require(root == tree.root);

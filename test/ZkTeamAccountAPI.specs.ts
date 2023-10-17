@@ -12,9 +12,9 @@ import { DefaultGasOverheads } from "@account-abstraction/sdk";
 import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import { poseidon1, poseidon2, poseidon3 } from "poseidon-lite"
 
-import { deployEntrypointAndBundlerHardhat, deployEntrypointAndBundlerHardhat, deployPoseidon, deployZkTeamFactory } from "../src/deploy";
+import { deployEntrypointAndBundlerHardhat, deployEntrypointAndBundlerHardhat, deployPoseidon, deployZkTeamFactory } from "../src/Deploy";
 
-describe("ERC-4337 Account Abstraction", function () {
+describe("ZkTeam Account API", function () {
     
     let config;
   
@@ -59,10 +59,10 @@ describe("ERC-4337 Account Abstraction", function () {
       const oldNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const oldNullifierHash  = poseidon1([oldNullifier]);
       
-      const newBalance = ethers.utils.parseEther("10").toBigInt();
+      const newAllowance = ethers.utils.parseEther("10").toBigInt();
       const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
-      const newCommitmentHash = poseidon3([newNullifier, newSecret, newBalance]);
+      const newCommitmentHash = poseidon3([newNullifier, newSecret, newAllowance]);
       config.tree.insert(newCommitmentHash);
       const newRoot = config.tree.root;
 
@@ -70,7 +70,7 @@ describe("ERC-4337 Account Abstraction", function () {
       
       const op = await zkTeamAccount.createSignedUserOp({
           ...privateInputs,
-          balanceEncrypted: ethers.utils.formatBytes32String("1"),
+          encryptedAllowance: ethers.utils.formatBytes32String("1"),
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
@@ -88,7 +88,7 @@ describe("ERC-4337 Account Abstraction", function () {
                   
       config = { 
           ...config,
-          balance: newBalance, 
+          allowance: newAllowance, 
           nullifier: newNullifier, 
           secret: newSecret,
       }; 
@@ -106,20 +106,20 @@ describe("ERC-4337 Account Abstraction", function () {
       
       const value = ethers.utils.parseEther("2.5").toBigInt();
       
-      const oldBalance = config.balance; // should be 10;
+      const oldAllowance = config.allowance; // should be 10;
       const oldNullifier = config.nullifier;
       const oldSecret = config.secret;
       const oldNullifierHash  = poseidon1([oldNullifier]);
-      const oldCommitmentHash = poseidon3([oldNullifier, oldSecret, oldBalance]);  
+      const oldCommitmentHash = poseidon3([oldNullifier, oldSecret, oldAllowance]);  
       const oldRoot = config.tree.root;
       const oldMerkleProof = config.tree.createProof(config.tree.indexOf(oldCommitmentHash));
       const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]);
       const oldTreePathIndices = oldMerkleProof.pathIndices;
       
-      const newBalance = ethers.utils.parseEther("7.5").toBigInt();
+      const newAllowance = ethers.utils.parseEther("7.5").toBigInt();
       const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
-      const newCommitmentHash = poseidon3([newNullifier, newSecret, newBalance]);
+      const newCommitmentHash = poseidon3([newNullifier, newSecret, newAllowance]);
       config.tree.insert(newCommitmentHash);
       const newRoot = config.tree.root;
       const newMerkleProof = config.tree.createProof(config.tree.indexOf(newCommitmentHash));
@@ -128,14 +128,14 @@ describe("ERC-4337 Account Abstraction", function () {
 
       const privateInputs = {
           value,
-          oldBalance,
+          oldAllowance,
           oldNullifier,
           oldSecret,
           oldNullifierHash,
           oldRoot,
           oldTreeSiblings,
           oldTreePathIndices,
-          newBalance,
+          newAllowance,
           newNullifier,
           newSecret,
           newCommitmentHash,
@@ -146,7 +146,7 @@ describe("ERC-4337 Account Abstraction", function () {
                   
       const op = await zkTeamAccount.createProvedUserOp({
           ...privateInputs,
-          balanceEncrypted: ethers.utils.formatBytes32String("1"),
+          encryptedAllowance: ethers.utils.formatBytes32String("1"),
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Hallo Welt!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
@@ -160,7 +160,7 @@ describe("ERC-4337 Account Abstraction", function () {
             
       config = { 
           ...config, 
-          balance: privateInputs.newBalance, 
+          allowance: privateInputs.newAllowance, 
           nullifier: privateInputs.newNullifier, 
           secret: privateInputs.newSecret, 
       };      
@@ -195,20 +195,20 @@ describe("ERC-4337 Account Abstraction", function () {
       
       const value = ethers.utils.parseEther("3").toBigInt();
       
-      const oldBalance = config.balance; // should be 7.5;
+      const oldAllowance = config.allowance; // should be 7.5;
       const oldNullifier = config.nullifier;
       const oldSecret = config.secret;
       const oldNullifierHash  = poseidon1([oldNullifier]);
-      const oldCommitmentHash = poseidon3([oldNullifier, oldSecret, oldBalance]);  
+      const oldCommitmentHash = poseidon3([oldNullifier, oldSecret, oldAllowance]);  
       const oldRoot = config.tree.root;
       const oldMerkleProof = config.tree.createProof(config.tree.indexOf(oldCommitmentHash));
       const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]);
       const oldTreePathIndices = oldMerkleProof.pathIndices;
       
-      const newBalance = ethers.utils.parseEther("4.5").toBigInt();
+      const newAllowance = ethers.utils.parseEther("4.5").toBigInt();
       const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
-      const newCommitmentHash = poseidon3([newNullifier, newSecret, newBalance]);
+      const newCommitmentHash = poseidon3([newNullifier, newSecret, newAllowance]);
       config.tree.insert(newCommitmentHash);
       const newRoot = config.tree.root;
       const newMerkleProof = config.tree.createProof(config.tree.indexOf(newCommitmentHash));
@@ -217,14 +217,14 @@ describe("ERC-4337 Account Abstraction", function () {
 
       const privateInputs = {
           value,
-          oldBalance,
+          oldAllowance,
           oldNullifier,
           oldSecret,
           oldNullifierHash,
           oldRoot,
           oldTreeSiblings,
           oldTreePathIndices,
-          newBalance,
+          newAllowance,
           newNullifier,
           newSecret,
           newCommitmentHash,
@@ -236,7 +236,7 @@ describe("ERC-4337 Account Abstraction", function () {
             
       const op = await zkTeamAccount.createProvedUserOp({
           ...privateInputs,
-          balanceEncrypted: ethers.utils.formatBytes32String("1"),
+          encryptedAllowance: ethers.utils.formatBytes32String("1"),
           target: config.greeter.address,
           data: config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
           gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function

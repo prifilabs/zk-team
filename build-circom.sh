@@ -1,21 +1,21 @@
 #!/bin/bash
 
 rm contracts/verifier.sol
-rm -Rf zk-data
-mkdir zk-data
+rm -Rf ptau-data
+mkdir ptau-data
 
 # compile circom
-circom circuits/ZKHiddenBalancePoseidon.circom --r1cs --wasm -o zk-data/
+circom circuits/zkteam.circom --r1cs --wasm -o ptau-data/
 
 # Powers of Tau
-snarkjs powersoftau new bn128 14 zk-data/pot14_0000.ptau -v
-snarkjs powersoftau contribute zk-data/pot14_0000.ptau zk-data/pot14_0001.ptau --name="First contribution" -v
+snarkjs powersoftau new bn128 14 ptau-data/pot14_0000.ptau -v
+snarkjs powersoftau contribute ptau-data/pot14_0000.ptau ptau-data/pot14_0001.ptau --name="First contribution" -v
 
 # Phase 2 (contract specific)
-snarkjs powersoftau prepare phase2 zk-data/pot14_0001.ptau zk-data/pot14_final.ptau -v
-snarkjs groth16 setup zk-data/ZKHiddenBalancePoseidon.r1cs zk-data/pot14_final.ptau zk-data/ZKHiddenBalancePoseidon_0000.zkey
-snarkjs zkey contribute zk-data/ZKHiddenBalancePoseidon_0000.zkey zk-data/ZKHiddenBalancePoseidon_0001.zkey --name="PriFi Labs" -v
-snarkjs zkey export verificationkey zk-data/ZKHiddenBalancePoseidon_0001.zkey zk-data/verification_key.json
+snarkjs powersoftau prepare phase2 ptau-data/pot14_0001.ptau ptau-data/pot14_final.ptau -v
+snarkjs groth16 setup ptau-data/ZkTeam.r1cs ptau-data/pot14_final.ptau ptau-data/ZkTeam_0000.zkey
+snarkjs zkey contribute ptau-data/ZkTeam_0000.zkey ptau-data/ZkTeam_0001.zkey --name="PriFi Labs" -v
+snarkjs zkey export verificationkey ptau-data/ZkTeam_0001.zkey ptau-data/verification_key.json
 
 # Generate solidty contract
-snarkjs zkey export solidityverifier zk-data/ZKHiddenBalancePoseidon_0001.zkey contracts/verifier.sol
+snarkjs zkey export solidityverifier ptau-data/ZkTeam_0001.zkey contracts/ZkTeamVerifier.sol
