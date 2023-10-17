@@ -1,7 +1,3 @@
-// import ZKTEAM from '../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json'
-
-// const ZKTEAM_INTERFACE = new ethers.utils.Interface(ZKTEAM.abi)
-
 import { ZkTeamAccountAPI } from "./ZkTeamAccountAPI"
 
 import { HDNode, arrayify, hexlify, randomBytes } from 'ethers/lib/utils'
@@ -46,10 +42,16 @@ class ZkTeamClient extends ZkTeamAccountAPI {
       this.blockIndex = 0;
     }
     
-    protected static encryptAllowance(allowance, key, nonce) {
+    protected static encryptAllowance(allowance, key, nonce, padding?) {
+      if (padding == undefined){
+          padding = randomBytes(7);
+      }else{
+          if ((padding.constructor !== Uint8Array)||(padding.length !== 7)){
+              throw new Error('Padding should be a Uint8Array of length 7');
+          }
+      }
       const stream = xchacha20poly1305(key, nonce);
       const plaintext = bigintToBuf(allowance);
-      const padding = randomBytes(7);
       const ciphertext = stream.encrypt(new Uint8Array([...padding, ...plaintext]));
       return hexlify(ciphertext);
     }
@@ -58,7 +60,7 @@ class ZkTeamClient extends ZkTeamAccountAPI {
       const stream = xchacha20poly1305(key, nonce);
       const ciphertext = arrayify(encryptedAllowance);
       const plaintext = stream.decrypt(ciphertext);
-      return bufToBigint(plaintext.slice(7));
+      return { padding: plaintext.slice(0, 7), allowance: bufToBigint(plaintext.slice(7)) };
     }
 
     protected static generateTriplet(key, index){
@@ -73,26 +75,53 @@ class ZkTeamClient extends ZkTeamAccountAPI {
         if (await this.checkAccountPhantom()) {
           return;
         }
-        const latest = this.provider.getBlock('latest')
+        const latest = await this.provider.getBlock('latest')
         const accountContract = await this.getAccountContract()
-        let events = await accountContract.queryFilter('CommitmentHashInserted', this.blockIndex, latest)
+        let events = await accountContract.queryFilter('ZkTeamExecution', this.blockIndex, latest.number)
         let shields = {}
         for (let event of events) {
             const [nullifierHash, commitmentHash] = event.args
-            this.executionLogs.push({nullifierHash, commitmentHash});
+            this.executionLogs.push({nullifierHash: ethers.BigNumber.from(nullifierHash).toBigInt(), commitmentHash: ethers.BigNumber.from(commitmentHash).toBigInt()});
         }
-        this.blockIndex = latest + 1;
+        this.blockIndex = latest.number + 1;
     }
     
-    protected async getMerkleRoot(commitmentHash){
-        await this.updateExecutionLogs()
+    protected async getUpdatedMerkleTree(){
+        await this.updateExecutionLogs();
         const commitmentHashes = [42, ...this.executionLogs.map(({nullifierHash, commitmentHash}) => commitmentHash)];
-        const tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, commitmentHashes);
-        const oldRoot = tree.root;
-        tree.insert(commitmentHash);
-        const newRoot = tree.root;
-        return {oldRoot, newRoot}
+        return new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, commitmentHashes);
     }
+    
+    protected static async insertMerkleTree(tree, commitmentHash){
+        tree.insert(commitmentHash);
+    }
+    
+    protected static async getMerkleRoot(tree){
+        return tree.root;
+    }
+    
+    protected static async getMerkleProof(tree, commitmentHash){
+        const merkleProof = tree.createProof(tree.indexOf(commitmentHash));
+        const treeSiblings = merkleProof.siblings.map( (s) => s[0]);
+        const treePathIndices = merkleProof.pathIndices;
+        return { treeSiblings, treePathIndices };
+    }
+    
+    // protected async getMerkleData(newCommitmentHash, oldCommitmentHash){
+    //
+    //     const commitmentHashes = [42, ...this.executionLogs.map(({nullifierHash, commitmentHash}) => commitmentHash)];
+    //     const tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, commitmentHashes);
+    //     const oldRoot = tree.root;
+    //     const oldMerkleProof = tree.createProof(config.tree.indexOf(oldCommitmentHash));
+    //     const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]);
+    //     const oldTreePathIndices = oldMerkleProof.pathIndices;
+    //
+    //     const newRoot = tree.root;
+    //     const newMerkleProof = tree.createProof(config.tree.indexOf(newCommitmentHash));
+    //     const newTreeSiblings = newMerkleProof.siblings.map( (s) => s[0]);
+    //     const newTreePathIndices = newMerkleProof.pathIndices;
+    //     return { oldRoot, oldTreeSiblings, oldTreePathIndices, newRoot, newTreeSiblings, newTreePathIndices }
+    // }
     
     protected async getLastIndex(key){
         if (await this.checkAccountPhantom()) {
@@ -110,14 +139,19 @@ class ZkTeamClient extends ZkTeamAccountAPI {
         return index;
     }
     
-    protected async getAllowance(key){
-        const index = await this.getLastIndex(key);
-        if (index == 0) return null;
-        const { n, k, i } = ZkTeamClient.generateTriplet(key, index-1);
+    protected async getAllowanceAtIndex(key, index){
+        const { n, k, i } = ZkTeamClient.generateTriplet(key, index);
         const nullifierHash  = poseidon1([n]);
         const accountContract = await this.getAccountContract()
         const encryptedBalance = await accountContract.nullifierHashes(nullifierHash);
         return ZkTeamClient.decryptAllowance(encryptedBalance, k, i);
+    }
+    
+    protected async getAllowance(key){
+        const index = await this.getLastIndex(key);
+        if (index == 0) return null;
+        const {allowance} = await this.getAllowanceAtIndex(key, index-1);
+        return allowance;
     }
 }
 
@@ -130,7 +164,9 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
 
     public async getAllowance(userIndex){
         const userKey = this.key.derivePath(`m/${this.index}/${userIndex}'`);
-        return super.getAllowance(userKey);
+        const allowance = await super.getAllowance(userKey);
+        if (allowance == null) return null;
+        return ethers.BigNumber.from(allowance);
     }
     
     public async getAllowances(page, limit){
@@ -138,16 +174,20 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
         return Promise.all(tasks);
     }
     
-    public async setAllowance(userIndex, newBalance){        
+    public async setAllowance(userIndex, newAllowance, padding?){
+        const newBalance = ethers.BigNumber.from(newAllowance).toBigInt();
+        
         const userKey = this.key.derivePath(`m/${this.index}/${userIndex}'`);
         const index = await this.getLastIndex(userKey);
         const oldTriplet = ZkTeamClient.generateTriplet(userKey, index);
         const newTriplet = ZkTeamClient.generateTriplet(userKey, index+1);        
         const oldNullifierHash  = poseidon1([oldTriplet.n]);
         const newCommitmentHash = poseidon3([newTriplet.n, newTriplet.s, newBalance]);
-        const { newRoot }  = await this.getMerkleRoot(newCommitmentHash);
+        const merkleTree = await this.getUpdatedMerkleTree();
+        await ZkTeamClient.insertMerkleTree(merkleTree, newCommitmentHash);
+        const newRoot = await ZkTeamClient.getMerkleRoot(merkleTree);
         const privateInputs = { oldNullifierHash, newCommitmentHash, newRoot };
-        const encryptedBalance = ZkTeamClient.encryptAllowance(newBalance, oldTriplet.k, oldTriplet.i);
+        const encryptedBalance = ZkTeamClient.encryptAllowance(newBalance, oldTriplet.k, oldTriplet.i, padding);
         
         const op = await this.createSignedUserOp({
             ...privateInputs,
@@ -161,12 +201,8 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
         return this.getUserOpReceipt(uoHash);
     }
     
-    public async sendTransaction(){
-    
-    }
-    
     public async checkIntegrity(){
-    
+        
     }
     
     public async deleteCommitmentHashes(){
@@ -181,8 +217,60 @@ export class ZkTeamClientUser extends ZkTeamClient {
         return super.getAllowance(this.key);
     }
     
-    public async sendTransaction(){
-    
+    public async sendTransaction(target, v, data, padding?){
+        
+        const index = await this.getLastIndex(this.key);
+        if (index == 0) throw new Error('Allowance not set');
+        
+        const oldTriplet = ZkTeamClient.generateTriplet(this.key, index);
+        const oldNullifierHash  = poseidon1([oldTriplet.n]);
+        const { allowance: oldBalance } = await this.getAllowanceAtIndex(this.key, index-1);
+        const oldCommitmentHash  = poseidon3([oldTriplet.n, oldTriplet.s, oldBalance]);
+                
+        const merkleTree = await this.getUpdatedMerkleTree();        
+        const oldRoot = await ZkTeamClient.getMerkleRoot(merkleTree);
+        const { treeSiblings:oldTreeSiblings, treePathIndices: oldTreePathIndices} = await ZkTeamClient.getMerkleProof(merkleTree, oldCommitmentHash);
+
+        const value = ethers.BigNumber.from(v).toBigInt();
+        const newBalance = oldBalance - value;
+        if (newBalance < 0) throw new Error('Insufficient balance');
+        const newTriplet = ZkTeamClient.generateTriplet(this.key, index+1);
+        const newNullifierHash  = poseidon1([newTriplet.n]);
+        const newCommitmentHash  = poseidon3([newTriplet.n, newTriplet.s, newBalance]);
+        await ZkTeamClient.insertMerkleTree(merkleTree, newCommitmentHash);
+        const newRoot = await ZkTeamClient.getMerkleRoot(merkleTree);
+        const { treeSiblings:newTreeSiblings, treePathIndices: newTreePathIndices} = await ZkTeamClient.getMerkleProof(merkleTree, newCommitmentHash);        
+        
+        const privateInputs = {
+            value,
+            oldBalance,
+            oldNullifier: oldTriplet.n,
+            oldSecret: oldTriplet.s,
+            oldNullifierHash,
+            oldRoot,
+            oldTreeSiblings,
+            oldTreePathIndices,
+            newBalance,
+            newNullifier: newTriplet.n,
+            newSecret: newTriplet.s,
+            newCommitmentHash,
+            newRoot,
+            newTreeSiblings,
+            newTreePathIndices,
+        };
+                
+        const encryptedBalance = ZkTeamClient.encryptAllowance(newBalance, oldTriplet.k, oldTriplet.i, padding);
+        
+        const op = await this.createProvedUserOp({
+            ...privateInputs,
+            balanceEncrypted: encryptedBalance,
+            target,
+            data,
+            gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
+        });
+        
+        const uoHash = await this.config.sendUserOp(op);
+        return this.getUserOpReceipt(uoHash);
     }
 
 }

@@ -4,7 +4,7 @@ import { ethers } from "hardhat";
 
 import { deployEntrypointAndBundlerHardhat, deployEntrypointAndBundlerHardhat, deployPoseidon, deployZkTeamFactory } from "../src/deploy";
 
-import { ZkTeamClientAdmin, getAccount, getAccounts } from "../src/ClientAPI";
+import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "../src/ClientAPI";
 
 describe.only("ERC-4337 Account Abstraction", function () {
     
@@ -28,38 +28,41 @@ describe.only("ERC-4337 Account Abstraction", function () {
             value: ethers.utils.parseEther('100'), 
         })
         
+        const Greeter = await ethers.getContractFactory("Greeter");
+        const greeter = await Greeter.deploy("Hello World!");
+        
         const config = {
             factoryAddress: zkTeamAccountFactory.address, 
             ...init
         }
                         
-        context = { ...init, owner, config }
+        context = { ...init, owner, greeter, config }
     })  
     
-  it("Should allow the admin to set the balance for user #0", async function () {
+  it("Should allow the admin to set the allowance for user #0", async function () {
             
-     const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                              
+     const key = ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                              
                             
      const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
      
      expect(await adminClient.checkAccountPhantom()).to.be.true;
      
-     const balance = ethers.utils.parseEther("100").toBigInt();
+     const allowance = ethers.utils.parseEther("100")
      
-     const txHash = await adminClient.setAllowance(0, balance);
+     const txHash = await adminClient.setAllowance(0, allowance);
      // console.log(`Transaction hash: ${txHash}`);
      
      expect(await adminClient.checkAccountPhantom()).to.be.false;
      
   })
   
-  it("Should allow the admin to get the balance for user #0", async function () {
+  it("Should allow the admin to get the allowance for user #0", async function () {
                         
      const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
      const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
           
-     const balance = await adminClient.getAllowance(0);     
-     expect(balance).to.be.equal(ethers.utils.parseEther("100").toBigInt());
+     const allowance = await adminClient.getAllowance(0); 
+     expect(allowance).to.be.equal(ethers.utils.parseEther("100"));
         
   })
   
@@ -67,7 +70,9 @@ describe.only("ERC-4337 Account Abstraction", function () {
                         
      const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
      const balances =  await getAccounts(ethers.provider, context.config.factoryAddress, await context.owner.getAddress(), 0, 5);
-     console.log(balances);
+     expect(balances[0]).to.have.property("exists", true);
+     expect(balances[0]).to.have.property("balance").to.be.above(0)
+     expect(balances.slice(1)).to.deep.equal(Array(4).fill({balance: ethers.utils.parseEther("0"), exists: false}));
   })
         
   
@@ -77,8 +82,79 @@ describe.only("ERC-4337 Account Abstraction", function () {
      const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
           
      const allowances = await adminClient.getAllowances(0, 5);     
-     console.log(allowances);
-        
+     expect(allowances[0]).to.be.equal(ethers.utils.parseEther("100"));
+     expect(allowances.slice(1)).to.deep.equal(Array(4).fill(null));
   })
+  
+  it("Should allow user 0 to get its allowance", async function () {
+                        
+     const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
+     const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
+     const userKey = await adminClient.getUserKey(0);
+    
+     const userClient = new ZkTeamClientUser(ethers.provider, context.owner, 0, userKey, context.config);
+     const allowance = await userClient.getAllowance();
+     expect(allowance).to.be.equal(ethers.utils.parseEther("100"));
+  })
+  
+  it("Should allow user 0 to use its allowance once", async function () {
+                     
+     expect(await context.greeter.greet()).to.equal("Hello World!")             
+                        
+     const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
+     const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
+     const userKey = await adminClient.getUserKey(0);
+
+     const userClient = new ZkTeamClientUser(ethers.provider, context.owner, 0, userKey, context.config);
+     
+     const target = context.greeter.address;
+     const value = ethers.utils.parseEther("10");
+     const data = context.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
+     
+     const txHash = await userClient.sendTransaction(target, value, data);
+          
+     expect(await context.greeter.greet()).to.equal("Bonjour Le Monde!");
+     const allowance = await userClient.getAllowance();
+     expect(allowance).to.be.equal(ethers.utils.parseEther("90"));  
+  })
+  
+  it("Should allow user 0 to use its allowance again", async function () {
+                                             
+     const key =  ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                                                
+     const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);
+     const userKey = await adminClient.getUserKey(0);
+
+     const userClient = new ZkTeamClientUser(ethers.provider, context.owner, 0, userKey, context.config);
+     
+     const target = context.greeter.address;
+     const value = ethers.utils.parseEther("42");
+     const data = context.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]),
+     
+     const txHash = await userClient.sendTransaction(target, value, data);
+          
+     expect(await context.greeter.greet()).to.equal("Hola Mundo!");
+     const allowance = await userClient.getAllowance();
+     expect(allowance).to.be.equal(ethers.utils.parseEther("48"));  
+  })
+  
+  it("Should allow the admin to update the allowance for user #0", async function () {
+            
+     const key = ethers.utils.HDNode.fromMnemonic(context.owner.mnemonic.phrase).extendedKey;                                              
+                            
+     const adminClient = new ZkTeamClientAdmin(ethers.provider, context.owner, 0, key, context.config);     
+     const allowance = ethers.utils.parseEther("100")
+     
+     const txHash = await adminClient.setAllowance(0, allowance);  
+        
+     expect(await adminClient.getAllowance(0)).to.be.equal(ethers.utils.parseEther("100"));
+     
+     const userKey = await adminClient.getUserKey(0);
+     const userClient = new ZkTeamClientUser(ethers.provider, context.owner, 0, userKey, context.config);
+     
+     expect(await userClient.getAllowance()).to.be.equal(ethers.utils.parseEther("100"));
+     
+  })
+  
+  
   
 })
