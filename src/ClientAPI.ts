@@ -107,22 +107,6 @@ class ZkTeamClient extends ZkTeamAccountAPI {
         return { treeSiblings, treePathIndices };
     }
     
-    // protected async getMerkleData(newCommitmentHash, oldCommitmentHash){
-    //
-    //     const commitmentHashes = [42, ...this.executionLogs.map(({nullifierHash, commitmentHash}) => commitmentHash)];
-    //     const tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, commitmentHashes);
-    //     const oldRoot = tree.root;
-    //     const oldMerkleProof = tree.createProof(config.tree.indexOf(oldCommitmentHash));
-    //     const oldTreeSiblings = oldMerkleProof.siblings.map( (s) => s[0]);
-    //     const oldTreePathIndices = oldMerkleProof.pathIndices;
-    //
-    //     const newRoot = tree.root;
-    //     const newMerkleProof = tree.createProof(config.tree.indexOf(newCommitmentHash));
-    //     const newTreeSiblings = newMerkleProof.siblings.map( (s) => s[0]);
-    //     const newTreePathIndices = newMerkleProof.pathIndices;
-    //     return { oldRoot, oldTreeSiblings, oldTreePathIndices, newRoot, newTreeSiblings, newTreePathIndices }
-    // }
-    
     protected async getLastIndex(key){
         if (await this.checkAccountPhantom()) {
           return 0;
