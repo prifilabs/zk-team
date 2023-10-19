@@ -121,9 +121,15 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         nullifierHashes[nullifierHash] = encryptedAllowance;
         tree.insert(commitmentHash);
         emit ZkTeamExecution(nullifierHash, commitmentHash, encryptedAllowance);
+        if (root != tree.root){
+            console.log("Tree root mismatch");
+            console.log(tree.root);
+            console.log(root);
+        }
         require(root == tree.root);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
+            console.log("Transaction failed");
             assembly {
                 revert(add(result, 32), mload(result))
             }

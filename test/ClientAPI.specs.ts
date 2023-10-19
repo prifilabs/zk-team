@@ -27,32 +27,29 @@ describe("ZkTeam Admin/Client API", function () {
             value: ethers.utils.parseEther('100'), 
         })
         
-        admin = {signer, key};
-        
         config = {
             ...init,
             accountAddress,
             factoryAddress: init.zkTeamAccountFactory.address, 
         }
+        
+        const client = new ZkTeamClientAdmin(ethers.provider, signer, 0, key, config);
+        
+        admin = {signer, key, client};
                     
     })  
     
-  it("Should allow the admin to set the allowance for user #0", async function () {
-                                        
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);
-     expect(await adminClient.checkAccountPhantom()).to.be.true;
-     
+  it("Should allow the admin to set the allowance for user #0", async function () {                                    
+     expect(await admin.client.checkAccountPhantom()).to.be.true;
      const allowance = ethers.utils.parseEther("100")
-     const txHash = await adminClient.setAllowance(0, allowance);
+     const txHash = await admin.client.setAllowance(0, allowance);
      // console.log(`Transaction hash: ${txHash}`);
-     expect(await adminClient.checkAccountPhantom()).to.be.false;
+     expect(await admin.client.checkAccountPhantom()).to.be.false;
               
   })
   
-  it("Should allow the admin to get the allowance for user #0", async function () {
-                        
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);  
-     const allowance = await adminClient.getAllowance(0);
+  it("Should allow the admin to get the allowance for user #0", async function () {            
+     const allowance = await admin.client.getAllowance(0);
      expect(allowance).to.be.equal(ethers.utils.parseEther("100"));
         
   })
@@ -66,59 +63,48 @@ describe("ZkTeam Admin/Client API", function () {
         
   
   it("Should allow the admin to get the allowance for multiple users", async function () {
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);
-     const allowances = await adminClient.getAllowances(0, 5);     
+     const allowances = await admin.client.getAllowances(0, 5);     
      expect(allowances[0]).to.be.equal(ethers.utils.parseEther("100"));
      expect(allowances.slice(1)).to.deep.equal(Array(4).fill(null));
   })
   
   it("Should allow user 0 to get its allowance", async function () {           
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);
-     const userKey = await adminClient.getUserKey(0);
-     
-     const userClient = new ZkTeamClientUser(ethers.provider, await adminClient.getAccountAddress(), userKey, config);     const allowance = await userClient.getAllowance();
+     const userKey = await admin.client.getUserKey(0);
+     const userClient = new ZkTeamClientUser(ethers.provider, config.accountAddress, userKey, config);     const allowance = await userClient.getAllowance();
      expect(allowance).to.be.equal(ethers.utils.parseEther("100"));
   })
   
   it("Should allow user 0 to use its allowance once", async function () {     
      expect(await config.greeter.greet()).to.equal("Hello World!")             
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);
-     const userKey = await adminClient.getUserKey(0);
-     
-     const userClient = new ZkTeamClientUser(ethers.provider, await adminClient.getAccountAddress(), userKey, config);     
+     const userKey = await admin.client.getUserKey(0);     
+     const userClient = new ZkTeamClientUser(ethers.provider, config.accountAddress, userKey, config);     
      const target = config.greeter.address;
      const value = ethers.utils.parseEther("10");
-     const data = config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]),
+     const data = config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]);
      const txHash = await userClient.sendTransaction(target, value, data);
      expect(await config.greeter.greet()).to.equal("Bonjour Le Monde!");
-     
      const allowance = await userClient.getAllowance();
      expect(allowance).to.be.equal(ethers.utils.parseEther("90"));  
   })
   
   it("Should allow user 0 to use its allowance again", async function () {                                     
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);
-     const userKey = await adminClient.getUserKey(0);
-     
-     const userClient = new ZkTeamClientUser(ethers.provider, await adminClient.getAccountAddress(), userKey, config);     
+     const userKey = await admin.client.getUserKey(0);     
+     const userClient = new ZkTeamClientUser(ethers.provider, await admin.client.getAccountAddress(), userKey, config);     
      const target = config.greeter.address;
      const value = ethers.utils.parseEther("42");
-     const data = config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]),
+     const data = config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]);
      const txHash = await userClient.sendTransaction(target, value, data);
      expect(await config.greeter.greet()).to.equal("Hola Mundo!");
-     
      const allowance = await userClient.getAllowance();
      expect(allowance).to.be.equal(ethers.utils.parseEther("48"));  
   })
   
   it("Should allow the admin to update the allowance for user #0", async function () {  
-     const adminClient = new ZkTeamClientAdmin(ethers.provider, admin.signer, 0, admin.key, config);
      const allowance = ethers.utils.parseEther("100");     
-     const txHash = await adminClient.setAllowance(0, allowance);  
-     expect(await adminClient.getAllowance(0)).to.be.equal(ethers.utils.parseEther("100"));
-     
-     const userKey = await adminClient.getUserKey(0);
-     const userClient = new ZkTeamClientUser(ethers.provider, await adminClient.getAccountAddress(), userKey, config);     
+     const txHash = await admin.client.setAllowance(0, allowance);  
+     expect(await admin.client.getAllowance(0)).to.be.equal(ethers.utils.parseEther("100"));     
+     const userKey = await admin.client.getUserKey(0);
+     const userClient = new ZkTeamClientUser(ethers.provider, await admin.client.getAccountAddress(), userKey, config);     
      expect(await userClient.getAllowance()).to.be.equal(ethers.utils.parseEther("100"));
   })
 })

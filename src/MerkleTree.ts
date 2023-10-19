@@ -3,7 +3,7 @@ import { poseidon2 } from "poseidon-lite"
 
 export class MerkleTree{
     constructor(leaves){
-        this.tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, leaves);
+        this.tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, [...leaves]);
     }
 
     public insert(commitmentHash){

@@ -33,14 +33,6 @@ function decryptAllowance(encryptedAllowance, key, nonce) {
   return { padding: plaintext.slice(0, 7), allowance: bufToBigint(plaintext.slice(7)) };
 }
 
-function generateTriplet(key, index){
-    const s = ethers.BigNumber.from(key.derivePath(`${index}/0`).privateKey).toBigInt();
-    const n = ethers.BigNumber.from(key.derivePath(`${index}/1`).privateKey).toBigInt();
-    const k = arrayify(key.derivePath(`${index}/2`).privateKey);
-    const i = arrayify(key.derivePath(`${index}/3`).privateKey).slice(0, 24);
-    return {s, n, k, i};
-}
-
 async function decryptAllowanceAtIndex(key, index, account){
     const { n, k, i } = generateTriplet(key, index);
     const nullifierHash  = poseidon1([n]);
@@ -58,6 +50,14 @@ async function getLastIndex(key, account){
         index++;
     }
     return index;
+}
+
+function generateTriplet(key, index){
+    const s = ethers.BigNumber.from(key.derivePath(`${index}/0`).privateKey).toBigInt();
+    const n = ethers.BigNumber.from(key.derivePath(`${index}/1`).privateKey).toBigInt();
+    const k = arrayify(key.derivePath(`${index}/2`).privateKey);
+    const i = arrayify(key.derivePath(`${index}/3`).privateKey).slice(0, 24);
+    return {s, n, k, i};
 }
 
 export async function getAccount(provider, factoryAddress, ownerAddress, accountIndex){
@@ -136,7 +136,7 @@ export class ZkTeamClientAdmin extends ZkTeamAccountAPI {
     }
     
     public async checkIntegrity(){
-        
+
     }
     
     public async deleteCommitmentHashes(){
