@@ -59,6 +59,7 @@
         "@noble/ciphers": "^0.3.0",
         "@zk-kit/incremental-merkle-tree": "^1.1.0",
         "@zk-kit/incremental-merkle-tree.sol": "^1.7.0",
+        "async-lock": "^1.4.0",
         "bigint-conversion": "^2.4.2",
         "ethers": "^5.7.2",
         "poseidon-lite": "^0.2.0",

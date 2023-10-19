@@ -38,8 +38,8 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     Groth16Verifier private immutable _verifier;
     uint256 private immutable _depth = 20;
 
-    event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash);
-    event ZkTeamAccountInitialized(IEntryPoint indexed entryPoint, address indexed owner);
+    event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash, bytes32 encryptedAllowance);
+    event ZkTeamInit(IEntryPoint indexed entryPoint, address indexed owner);
 
 
     /// @inheritdoc BaseAccount
@@ -66,7 +66,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         owner = anOwner;
         tree.init(_depth, 0);
         tree.insert(42); // Bug: I have no clue why it does not work without this first insert
-        emit ZkTeamAccountInitialized(_entryPoint, owner);
+        emit ZkTeamInit(_entryPoint, owner);
     }
     
     /// implement template method of BaseAccount
@@ -120,7 +120,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         _onlyEntryPointOrOwner();
         nullifierHashes[nullifierHash] = encryptedAllowance;
         tree.insert(commitmentHash);
-        emit ZkTeamExecution(nullifierHash, commitmentHash);
+        emit ZkTeamExecution(nullifierHash, commitmentHash, encryptedAllowance);
         require(root == tree.root);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {

@@ -1,7 +1,7 @@
 import { readFileSync } from "fs";
 import { resolve } from "path";
 
-import { BigNumber, BigNumberish, Contract } from 'ethers'
+import { BigNumber, BigNumberish, Contract, constants } from 'ethers'
 import { arrayify, hexConcat, keccak256, defaultAbiCoder } from 'ethers/lib/utils'
 
 import { BaseAccountAPI } from '@account-abstraction/sdk'
@@ -14,6 +14,9 @@ import { wasm as wasm_tester} from "circom_tester";
 
 import { poseidon1 } from "poseidon-lite"
 
+import AsyncLock from 'async-lock';
+
+
 function parseNumber(a) {
     if (a == null || a === '')
         return null;
@@ -22,12 +25,12 @@ function parseNumber(a) {
 
 /**
  * constructor params, added no top of base params:
- * @param owner the signer object for the account owner
- * @param factoryAddress address of contract "factory" to deploy new contracts (not needed if account already deployed)
- * @param index nonce value used when creating multiple accounts for the same owner
+ * @param signer only needed for the admin
+ * @param factoryAddress not needed if account already deployed
+ * @param index not needed if account already deployed
  */
 export interface ZkTeamAccountApiParams extends BaseApiParams {
-  owner: Signer
+  signer?: Signer
   factoryAddress?: string
   index?: BigNumberish
 }
@@ -37,9 +40,50 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
     constructor(params: ZkTeamAccountApiParams) {
         var _a;
         super(params);
+        this.signer = params.signer;
         this.factoryAddress = params.factoryAddress;
-        this.owner = params.owner;
         this.index = BigNumber.from((_a = params.index) !== null && _a !== void 0 ? _a : 0);
+        this.lock = new AsyncLock();
+        this.blockIndex = 0;
+        this.logs = [];
+        this.commitmentHashes = [42];
+        this.nullifierHashes = {};
+    }
+    
+    async getLogs(){
+        const self = this;
+        return this.lock.acquire('key', async function() {
+                if (await self.checkAccountPhantom()) return [];
+                const latest = await self.provider.getBlock('latest');
+                if (latest.number < self.blockIndex) return self.logs;
+                const accountContract = await self.getAccountContract();
+                const events = await accountContract.queryFilter('ZkTeamExecution', self.blockIndex, latest.number)
+                for (let event of events) {
+                    let [nullifierHash, commitmentHash, encryptedAllowance] = event.args
+                    nullifierHash = BigNumber.from(nullifierHash).toBigInt();
+                    commitmentHash = BigNumber.from(commitmentHash).toBigInt();
+                    self.logs.push({ 
+                        nullifierHash, 
+                        commitmentHash, 
+                        encryptedAllowance 
+                    });
+                    self.commitmentHashes.push(commitmentHash);
+                    self.nullifierHashes[nullifierHash] = encryptedAllowance;
+                }
+                self.blockIndex = latest.number + 1;
+                return self.logs;
+        })
+    }
+    
+    async getCommitmentHashes(){
+        await this.getLogs();
+        return this.commitmentHashes;
+    }
+    
+    async getEncryptedAllowance(nullifierHash){
+        await this.getLogs();
+        if (nullifierHash in this.nullifierHashes) return this.nullifierHashes[nullifierHash];
+        else return constants.HashZero;
     }
     
     async getAccountContract() {
@@ -64,7 +108,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
         }
         return hexConcat([
             this.factory.address,
-            this.factory.interface.encodeFunctionData('createAccount', [await this.owner.getAddress(), this.index])
+            this.factory.interface.encodeFunctionData('createAccount', [await this.signer.getAddress(), this.index])
         ]);
     }
     
@@ -119,7 +163,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
     
     
     async signUserOpHash(userOpHash) {
-        return await this.owner.signMessage((0, arrayify)(userOpHash));
+        return await this.signer.signMessage((0, arrayify)(userOpHash));
     }
     
     async createProvedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
