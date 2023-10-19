@@ -62,6 +62,11 @@ export async function deployPoseidon(){
     }
 }
 
+export async function deployGreeter(){
+    const Greeter = await ethers.getContractFactory("Greeter");
+    return Greeter.deploy("Hello World!");
+}
+
 export async function deployZkTeamFactory(chainId, entryPointAddress){
     const IncrementalBinaryTreeLibFactory = await ethers.getContractFactory("IncrementalBinaryTree", {
         libraries: {
@@ -82,4 +87,17 @@ export async function deployZkTeamFactory(chainId, entryPointAddress){
     }});
             
     return zkTeamAccountFactoryFactory.deploy(entryPointAddress, zkTeamVerifier.address);
+}
+
+export async function deployAll(chainId){
+        
+    let init = (chainId == 1337)? await deployEntrypointAndBundlerLocal() :  await deployEntrypointAndBundlerHardhat() ;
+
+    await deployPoseidon();
+
+    const zkTeamAccountFactory = await deployZkTeamFactory(chainId, init.entryPointAddress);
+    
+    const greeter = await deployGreeter();
+    
+    return { ...init, greeter, zkTeamAccountFactory }
 }
