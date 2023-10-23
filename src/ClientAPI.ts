@@ -1,7 +1,6 @@
 import { ZkTeamAccountAPI } from "./ZkTeamAccountAPI"
 
 import { HDNode, arrayify, hexlify, randomBytes } from 'ethers/lib/utils'
-import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import { poseidon1, poseidon3 } from "poseidon-lite"
 
 import { xchacha20poly1305 } from '@noble/ciphers/chacha';
@@ -96,14 +95,18 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
       this.key = HDNode.fromExtendedKey(key);
     }
     
+    private getRawUserKey(userIndex){
+        return this.key.derivePath(`m/${this.index}/${userIndex}'`);
+    }
+    
     public async getUserKey(userIndex){
-        const userKey = this.key.derivePath(`m/${this.index}/${userIndex}'`);
+        const userKey = this.getRawUserKey(userIndex);
         return userKey.extendedKey;
     }
 
     public async getAllowance(userIndex){
-        const userKey = this.key.derivePath(`m/${this.index}/${userIndex}'`);        
-        const index = await this.getLastIndex(userKey, this);
+        const userKey = this.getRawUserKey(userIndex);
+        const index = await this.getLastIndex(userKey);
         if (index == 0) return null;
         const { allowance } = await this.decryptAllowanceAtIndex(userKey, index-1);
         if (allowance == null) return null;
@@ -117,8 +120,8 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
     
     public async generateInputs(userIndex, rawNewAllowance, padding?){
         const newAllowance = ethers.BigNumber.from(rawNewAllowance).toBigInt();
-        const userKey = this.key.derivePath(`m/${this.index}/${userIndex}'`);
-        const index = (await this.checkAccountPhantom())? 0 : await this.getLastIndex(userKey, this);
+        const userKey = this.getRawUserKey(userIndex);
+        const index = (await this.checkAccountPhantom())? 0 : await this.getLastIndex(userKey);
         const oldTriplet = ZkTeamClient.generateTriplet(userKey, index);
         const newTriplet = ZkTeamClient.generateTriplet(userKey, index+1);        
         const oldNullifierHash  = poseidon1([oldTriplet.n]);
@@ -143,14 +146,40 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
         return this.getUserOpReceipt(uoHash);
     }
     
-    public async checkIntegrity(){
-
+    public async checkIntegrity(userIndexLimit){
+        for (let userIndex=0; userIndex<=userIndexLimit; userIndex++){
+            const userKey = this.getRawUserKey(userIndex);
+            const index = await this.getLastIndex(userKey);
+            if (index == 0) continue;
+            for (let i=1; i<=index; i++){
+                const oldTriplet = ZkTeamClient.generateTriplet(userKey, i-1);
+                const newTriplet = ZkTeamClient.generateTriplet(userKey, i);
+                const nullifierHash  = poseidon1([oldTriplet.n]);
+                const log = this.nullifierHashes[nullifierHash];
+                if (!log.verified){
+                    const {allowance} = ZkTeamClient.decryptAllowance(log.encryptedAllowance, oldTriplet.k, oldTriplet.i);
+                    const commitmentHash = poseidon3([newTriplet.n, newTriplet.s, allowance]);
+                    if (commitmentHash === log.commitmentHash) log.verified = true;
+                }
+            }
+        }
+        return Object.values(this.nullifierHashes).reduce(function(acc, log){
+            if (!log.verified)  acc.push(log.commitmentHash);
+            return acc; 
+        }, []);
     }
     
-    public async deleteCommitmentHashes(){
-    
+    public async discardCommitmentHashes(commitmentHashes){
+        const tree = new MerkleTree(await this.getCommitmentHashes());
+        const commitmentHashList = [];
+        for( let commitmentHash of commitmentHashes){
+            const { treeSiblings, treePathIndices } = tree.getProof(commitmentHash);
+            commitmentHashList.push({commitmentHash, treeSiblings, treePathIndices});
+            tree.discard(commitmentHash);
+        }
+        const contract = await this.getAccountContract();
+        return contract.discardCommitmentHashes(commitmentHashList);
     }
-    
 }
 
 export class ZkTeamClientUser extends ZkTeamClient {
@@ -168,21 +197,21 @@ export class ZkTeamClientUser extends ZkTeamClient {
     }
 
     public async getAllowance(){
-        const index = await this.getLastIndex(this.key, this);
+        const index = await this.getLastIndex(this.key);
         if (index == 0) return null;
-        const {allowance} = await this.decryptAllowanceAtIndex(this.key, index-1, this);
+        const {allowance} = await this.decryptAllowanceAtIndex(this.key, index-1);
         return allowance;
     }
     
     public async generateInputs(v, padding?){
         const value = ethers.BigNumber.from(v).toBigInt();
         
-        const index = await this.getLastIndex(this.key, this);
+        const index = await this.getLastIndex(this.key);
         if (index == 0) throw new Error('Allowance not set');
         
         const oldTriplet = ZkTeamClient.generateTriplet(this.key, index);
         const oldNullifierHash  = poseidon1([oldTriplet.n]);
-        const { allowance: oldAllowance } = await this.decryptAllowanceAtIndex(this.key, index-1, this);
+        const { allowance: oldAllowance } = await this.decryptAllowanceAtIndex(this.key, index-1);
         const oldCommitmentHash  = poseidon3([oldTriplet.n, oldTriplet.s, oldAllowance]);
         
         const commitmentHashes = await this.getCommitmentHashes();

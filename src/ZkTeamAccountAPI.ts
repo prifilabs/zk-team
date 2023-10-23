@@ -45,7 +45,6 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
         this.index = BigNumber.from((_a = params.index) !== null && _a !== void 0 ? _a : 0);
         this.lock = new AsyncLock();
         this.blockIndex = 0;
-        this.logs = [];
         this.commitmentHashes = [42];
         this.nullifierHashes = {};
     }
@@ -57,18 +56,20 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
                 const latest = await self.provider.getBlock('latest');
                 if (latest.number < self.blockIndex) return self.logs;
                 const accountContract = await self.getAccountContract();
-                const events = await accountContract.queryFilter('ZkTeamExecution', self.blockIndex, latest.number)
-                for (let event of events) {
+                const executionEvents = await accountContract.queryFilter('ZkTeamExecution', self.blockIndex, latest.number)
+                for (let event of executionEvents) {
                     let [nullifierHash, commitmentHash, encryptedAllowance] = event.args
                     nullifierHash = BigNumber.from(nullifierHash).toBigInt();
                     commitmentHash = BigNumber.from(commitmentHash).toBigInt();
-                    self.logs.push({ 
-                        nullifierHash, 
-                        commitmentHash, 
-                        encryptedAllowance 
-                    });
                     self.commitmentHashes.push(commitmentHash);
-                    self.nullifierHashes[nullifierHash] = encryptedAllowance;
+                    self.nullifierHashes[nullifierHash] = { encryptedAllowance, commitmentHash }
+                }
+                const discardEvents = await accountContract.queryFilter('ZkTeamDiscard', self.blockIndex, latest.number)
+                for (let event of discardEvents) {
+                    let [commitmentHash] = event.args
+                    commitmentHash = BigNumber.from(commitmentHash).toBigInt();
+                    const index = self.commitmentHashes.indexOf(commitmentHash);
+                    self.commitmentHashes[index] = BigInt(0);
                 }
                 self.blockIndex = latest.number + 1;
                 return self.logs;
@@ -82,13 +83,14 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
     
     async getEncryptedAllowance(nullifierHash){
         await this.getLogs();
-        if (nullifierHash in this.nullifierHashes) return this.nullifierHashes[nullifierHash];
+        if (nullifierHash in this.nullifierHashes) return this.nullifierHashes[nullifierHash].encryptedAllowance;
         else return constants.HashZero;
     }
     
     async getAccountContract() {
         if (this.accountContract == null) {
-            this.accountContract = new Contract(await this.getAccountAddress(), ZkTeamAccount.abi, this.provider);
+            const signerOrProvider = (this.signer)? this.signer : this.provider;
+            this.accountContract = new Contract(await this.getAccountAddress(), ZkTeamAccount.abi, signerOrProvider);
         }
         return this.accountContract;
     }
@@ -133,7 +135,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
     async encodeExecute(detailsForUserOp) {
         const accountContract = await this.getAccountContract();
         const value = parseNumber(detailsForUserOp.value) ?? BigNumber.from(0)
-                                
+                         
         return accountContract.interface.encodeFunctionData(
           'execute',
           [

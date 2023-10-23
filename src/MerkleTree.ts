@@ -2,6 +2,7 @@ import { IncrementalMerkleTree } from "@zk-kit/incremental-merkle-tree"
 import { poseidon2 } from "poseidon-lite"
 
 export class MerkleTree{
+    
     constructor(leaves){
         this.tree = new IncrementalMerkleTree(poseidon2, 20, BigInt(0), 2, [...leaves]);
     }
@@ -12,6 +13,11 @@ export class MerkleTree{
     
     public getRoot(){
         return this.tree.root;
+    }
+    
+    public discard(commitmentHash){
+        const index = this.tree.indexOf(commitmentHash);
+        this.tree.update(index, BigInt(0));
     }
     
     public getProof(commitmentHash){

@@ -18,6 +18,12 @@ import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
 import "./ZkTeamVerifier.sol";
 import "poseidon-solidity/PoseidonT2.sol";
 
+struct CommitmentHashInfo {
+    uint256 commitmentHash;
+    uint256[] treeSiblings;
+    uint8[] treePathIndices;
+}
+
 /**
   * minimal account.
   *  this is sample minimal account.
@@ -38,6 +44,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     Groth16Verifier private immutable _verifier;
     uint256 private immutable _depth = 20;
 
+    event ZkTeamDiscard(uint256 commitmentHash);
     event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash, bytes32 encryptedAllowance);
     event ZkTeamInit(IEntryPoint indexed entryPoint, address indexed owner);
 
@@ -133,6 +140,14 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             assembly {
                 revert(add(result, 32), mload(result))
             }
+        }
+    }
+    
+    function discardCommitmentHashes(CommitmentHashInfo[] calldata commitmentHashList) public{
+         _onlyOwner();
+        for (uint i=0; i<commitmentHashList.length; i++) {
+            tree.update(commitmentHashList[i].commitmentHash, 0, commitmentHashList[i].treeSiblings, commitmentHashList[i].treePathIndices);
+            emit ZkTeamDiscard(commitmentHashList[i].commitmentHash);
         }
     }
 
