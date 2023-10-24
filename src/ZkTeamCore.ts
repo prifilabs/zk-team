@@ -12,10 +12,11 @@ import * as ZkTeamAccount from '../artifacts/contracts/ZkTeamAccount.sol/ZkTeamA
 import { groth16 } from "snarkjs";
 import { wasm as wasm_tester} from "circom_tester";
 
-import { poseidon1 } from "poseidon-lite"
+import { MerkleTree } from "./utils/MerkleTree";
+import { encryptAllowance, decryptAllowance } from "./utils/encryption";
+import { poseidon1, poseidon3 } from "poseidon-lite"
 
 import AsyncLock from 'async-lock';
-
 
 function parseNumber(a) {
     if (a == null || a === '')
@@ -29,15 +30,15 @@ function parseNumber(a) {
  * @param factoryAddress not needed if account already deployed
  * @param index not needed if account already deployed
  */
-export interface ZkTeamAccountApiParams extends BaseApiParams {
+export interface ZkTeamCoreParams extends BaseApiParams {
   signer?: Signer
   factoryAddress?: string
   index?: BigNumberish
 }
 
-export class ZkTeamAccountAPI extends BaseAccountAPI {
+export class ZkTeamCore extends BaseAccountAPI {
     
-    constructor(params: ZkTeamAccountApiParams) {
+    constructor(params: ZkTeamCoreParams) {
         var _a;
         super(params);
         this.signer = params.signer;
@@ -50,6 +51,14 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
             commitmentHashes: {},
             nullifierHashes: {},
         }
+    }
+    
+    static getNullifierHash(nullifier){
+        return poseidon1([nullifier]);
+    }
+    
+    static getCommitmentHash(nullifier, secret, allowance){
+        return poseidon3([nullifier, secret, allowance]);
     }
     
     async getData(){
@@ -96,6 +105,12 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
         else return constants.HashZero;
     }
     
+    async getDecryptedAllowance(nullifierHash, key, nonce){
+        const encryptedAllowance = await this.getEncryptedAllowance(nullifierHash);
+        if (encryptedAllowance == constants.HashZero) throw new Error('Encrypted Allowance is set to 0');
+        return decryptAllowance(encryptedAllowance, key, nonce); 
+    }
+    
     async getAccountContract() {
         if (this.accountContract == null) {
             const signerOrProvider = (this.signer)? this.signer : this.provider;
@@ -114,7 +129,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
                 this.factory = new Contract(this.factoryAddress, ZkTeamAccountFactory.abi, this.provider);
             }
             else {
-                throw new Error('no factory to get initCode');
+                throw new Error('No factory to get initCode');
             }
         }
         return hexConcat([
@@ -144,7 +159,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
     async encodeExecute(detailsForUserOp) {
         const accountContract = await this.getAccountContract();
         const value = parseNumber(detailsForUserOp.value) ?? BigNumber.from(0)
-                         
+                                                  
         return accountContract.interface.encodeFunctionData(
           'execute',
           [
@@ -172,14 +187,80 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
         };
     }
     
+    async generateSignatureInputs(params){
+        const newAllowance = params.newAllowance;
+        const oldNullifierHash  = ZkTeamCore.getNullifierHash(params.oldNullifier);
+        const newCommitmentHash = ZkTeamCore.getCommitmentHash(params.newNullifier, params.newSecret, newAllowance);
+        const commitmentHashes = await this.getCommitmentHashes();
+        const tree = new MerkleTree(commitmentHashes);
+        tree.insert(newCommitmentHash);
+        const newRoot = tree.getRoot();
+        const encryptedAllowance = encryptAllowance(newAllowance, params.newKey, params.newNonce, params.newPadding);
+        return  { 
+            newAllowance, 
+            oldNullifierHash, 
+            newCommitmentHash, 
+            newRoot, 
+            encryptedAllowance,
+        };
+    }
     
     async signUserOpHash(userOpHash) {
         return await this.signer.signMessage((0, arrayify)(userOpHash));
     }
     
-    async createProvedUserOp (info: TransactionDetailsForUserOp): Promise<UserOperationStruct> {
+    async createSignedUserOp(info) {
+        return super.createSignedUserOp({...info, gasLimit: 1000000});
+    }
+    
+    async generateProofInputs(params){
+        const value = params.value;
+        const {padding: oldPadding, allowance: oldAllowance} = await this.getDecryptedAllowance(params.oldNullifierHash, params.oldKey, params.oldNonce);
         
-        let userOp = await this.createUnsignedUserOp(info);
+        const oldNullifierHash  = ZkTeamCore.getNullifierHash(params.oldNullifier);
+        const oldCommitmentHash = ZkTeamCore.getCommitmentHash(params.oldNullifier, params.oldSecret, oldAllowance);
+        
+        const commitmentHashes = await this.getCommitmentHashes();
+        const tree = new MerkleTree(commitmentHashes);      
+        const oldRoot = tree.getRoot();
+        const { treeSiblings:oldTreeSiblings, treePathIndices: oldTreePathIndices} = tree.getProof(oldCommitmentHash);
+
+        const newAllowance = oldAllowance - value;
+        if (newAllowance < 0) throw new Error('Insufficient allowance');
+        const newNullifierHash  = ZkTeamCore.getNullifierHash(params.newNullifier);
+        const newCommitmentHash  = ZkTeamCore.getCommitmentHash(params.newNullifier, params.newSecret, newAllowance);
+        tree.insert(newCommitmentHash);
+        const newRoot = tree.getRoot();
+        const { treeSiblings:newTreeSiblings, treePathIndices: newTreePathIndices} = tree.getProof(newCommitmentHash);
+        
+        const encryptedAllowance = encryptAllowance(newAllowance, params.newKey, params.newNonce, params.newPadding);
+        
+        return { 
+            value, 
+            oldAllowance, 
+            oldPadding,
+            oldNullifier: params.oldNullifier,
+            oldSecret: params.oldSecret,
+            oldNullifierHash, 
+            oldCommitmentHash, 
+            oldRoot, 
+            oldTreeSiblings, 
+            oldTreePathIndices, 
+            newAllowance, 
+            newNullifier: params.newNullifier,
+            newSecret: params.newSecret,
+            newNullifierHash, 
+            newCommitmentHash, 
+            newRoot, 
+            newTreeSiblings, 
+            newTreePathIndices, 
+            encryptedAllowance,
+        }
+    }
+    
+    async createProvedUserOp (info) {
+        
+        let userOp = await this.createUnsignedUserOp({...info, gasLimit: 1000000});
 
         // interstingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
         const callDataHash = poseidon1([BigNumber.from(keccak256(userOp.callData)).toBigInt()]);
@@ -198,7 +279,7 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
             newTreePathIndices: info.newTreePathIndices,
             callDataHash
         };
-
+        
         const outputs = {
             oldNullifierHash: info.oldNullifierHash,
             oldRoot: info.oldRoot,
@@ -229,5 +310,17 @@ export class ZkTeamAccountAPI extends BaseAccountAPI {
             ...userOp,
             signature: defaultAbiCoder.encode([ "uint256[2]",  "uint256[2][2]", "uint256[2]", "uint256[6]"], proofCalldataFormatted)
         }
+    }
+    
+    public async discardCommitmentHashes(commitmentHashes){
+        const tree = new MerkleTree(await this.getCommitmentHashes());
+        const commitmentHashList = [];
+        for( let commitmentHash of commitmentHashes){
+            const { treeSiblings, treePathIndices } = tree.getProof(commitmentHash);
+            commitmentHashList.push({commitmentHash, treeSiblings, treePathIndices});
+            tree.discard(commitmentHash);
+        }
+        const contract = await this.getAccountContract();
+        return contract.discardCommitmentHashes(commitmentHashList);
     }
 }

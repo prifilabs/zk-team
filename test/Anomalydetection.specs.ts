@@ -1,15 +1,11 @@
 import { expect } from 'chai'
-
 import { ethers } from "hardhat";
 
-import { deployAll } from "../src/Deploy";
+import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "../src/ZkTeamClient";
+import { encryptAllowance } from "../src/utils/encryption";
+import { deployAll } from "../src/utils/deploy";
 
-import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "../src/ClientAPI";
-
-import { MerkleTree } from "../src/MerkleTree";
-import { poseidon1, poseidon3 } from "poseidon-lite"
-
-describe.only("Anomaly Detection", function () {
+describe("Anomaly Detection", function () {
     
     let config;
     let admin;
@@ -75,16 +71,18 @@ describe.only("Anomaly Detection", function () {
 
      const inputs = await userClient.generateInputs(value);
 
-     const tamperedAllowance = ZkTeamClientUser.encryptAllowance(ethers.utils.parseEther("100").toBigInt(), inputs.k, inputs.i);
-
+     const index = await userClient.getLastIndex(userClient.key);
+     const {k, i} = await ZkTeamClientUser.generateTriplet(userClient.key, index);
+     
+     const tamperedAllowance = encryptAllowance(ethers.utils.parseEther("100").toBigInt(), k, i);
+     
      anomalies.push(inputs.newCommitmentHash);
-
+     
      const op = await userClient.createProvedUserOp({
          ...inputs,
          encryptedAllowance: tamperedAllowance,
          target,
          data,
-         gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
      });
      const uoHash = await config.sendUserOp(op);
      const txHash = await userClient.getUserOpReceipt(uoHash);
@@ -93,7 +91,9 @@ describe.only("Anomaly Detection", function () {
      expect(await admin.client.getAllowance(1)).to.be.equal(ethers.utils.parseEther("100"));
   })
   
-  it("Should allow user 2 to take away the balance", async function () {
+  let rogueKey;
+  
+  it("Should allow user 2 to steal the allowance", async function () {
      const userKey = await admin.client.getUserKey(2);
      const userClient = new ZkTeamClientUser(ethers.provider, config.accountAddress, userKey, config);
 
@@ -101,32 +101,75 @@ describe.only("Anomaly Detection", function () {
      const value = ethers.utils.parseEther("30");
      const greeting = 'User #2 is taking away the balance';
      const data = config.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
-
-     const inputs = await userClient.generateInputs(value);
      
-     const rogueKey = ethers.utils.HDNode.fromMnemonic(ethers.Wallet.createRandom().mnemonic.phrase);
-     const {n, s} = await ZkTeamClientUser.generateTriplet(rogueKey, 0);
-     const newNullifierHash  = poseidon1([n]);
-     const newCommitmentHash  = poseidon3([n, s, inputs.newAllowance]);
-     const commitmentHashes = await userClient.getCommitmentHashes();
-     const tree = new MerkleTree(commitmentHashes);     
-     tree.insert(newCommitmentHash);
-     const newRoot = tree.getRoot();
-     const { treeSiblings:newTreeSiblings, treePathIndices: newTreePathIndices} = tree.getProof(newCommitmentHash);
-
-     anomalies.push(newCommitmentHash);
+     const index = await userClient.getLastIndex(userClient.key);
+     const oldTriplet = await ZkTeamClientUser.generateTriplet(userClient.key, index-1);
+     const currentTriplet = await ZkTeamClientUser.generateTriplet(userClient.key, index);
+     
+     rogueKey = ethers.utils.HDNode.fromMnemonic(ethers.Wallet.createRandom().mnemonic.phrase);
+     const newTriplet = await ZkTeamClientUser.generateTriplet(rogueKey, 0);
+     
+     const rogueInputs = await userClient.generateProofInputs({
+         value: value.toBigInt(),
+         oldNullifierHash: ZkTeamClientUser.getNullifierHash(oldTriplet.n),
+         oldNullifier: currentTriplet.n,
+         oldSecret: currentTriplet.s,
+         oldKey: oldTriplet.k,
+         oldNonce: oldTriplet.i,
+         newNullifier: newTriplet.n,
+         newSecret: newTriplet.s,
+         newKey: currentTriplet.k,
+         newNonce: currentTriplet.i,
+     });
+     
+     anomalies.push(rogueInputs.newCommitmentHash);
 
      const op = await userClient.createProvedUserOp({
-         ...inputs,
-         newNullifier: n,
-         newSecret: s,
-         newCommitmentHash,
-         newRoot,
-         newTreeSiblings,
-         newTreePathIndices,
+         ...rogueInputs,
          target,
          data,
-         gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
+     });
+     const uoHash = await config.sendUserOp(op);
+     const txHash = await userClient.getUserOpReceipt(uoHash);
+
+     expect(await config.greeter.greet()).to.equal(greeting);
+     expect(await admin.client.getAllowance(2)).to.be.equal(ethers.utils.parseEther("70"));
+  })
+
+  it("Should allow user 2 to use the stolen allowance", async function () {
+      
+      const userKey = await admin.client.getUserKey(2);
+      const userClient = new ZkTeamClientUser(ethers.provider, config.accountAddress, userKey, config);
+
+      const target = config.greeter.address;
+      const value = ethers.utils.parseEther("20");
+      const greeting = 'User #2 is now using its rogue wallet';
+      const data = config.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
+     
+     const index = await userClient.getLastIndex(userClient.key);
+     const oldTriplet = await ZkTeamClientUser.generateTriplet(userClient.key, index-1);
+     const currentTriplet = await ZkTeamClientUser.generateTriplet(rogueKey, 0);
+     const newTriplet = await ZkTeamClientUser.generateTriplet(rogueKey, 1);
+     
+     const rogueInputs = await userClient.generateProofInputs({
+         value: value.toBigInt(),
+         oldNullifierHash: ZkTeamClientUser.getNullifierHash(oldTriplet.n),
+         oldNullifier: currentTriplet.n,
+         oldSecret: currentTriplet.s,
+         oldKey: oldTriplet.k,
+         oldNonce: oldTriplet.i,
+         newNullifier: newTriplet.n,
+         newSecret: newTriplet.s,
+         newKey: currentTriplet.k,
+         newNonce: currentTriplet.i,
+     });
+     
+     anomalies.push(rogueInputs.newCommitmentHash);
+
+     const op = await userClient.createProvedUserOp({
+         ...rogueInputs,
+         target,
+         data,
      });
      const uoHash = await config.sendUserOp(op);
      const txHash = await userClient.getUserOpReceipt(uoHash);
@@ -134,68 +177,22 @@ describe.only("Anomaly Detection", function () {
      expect(await config.greeter.greet()).to.equal(greeting);
      expect(await admin.client.getAllowance(2)).to.be.equal(ethers.utils.parseEther("70"));
      
-     const rogueGreeting = 'User #2 is now using its rogue wallet';
-     const rogueData = config.greeter.interface.encodeFunctionData('setGreeting', [rogueGreeting]);
-     
-     const rogueValue = ethers.utils.parseEther("20").toBigInt();
-     const {n: rogueN, s: rogueS, k: rogueK, i: rogueI} = await ZkTeamClientUser.generateTriplet(rogueKey, 1);
-     const rogueAllowance = inputs.newAllowance - rogueValue;
-     const rogueCommitmentHash  = poseidon3([rogueN, rogueS, rogueAllowance]);
-     tree.insert(rogueCommitmentHash);
-     const rogueRoot = tree.getRoot();
-     const { treeSiblings:rogueTreeSiblings, treePathIndices: rogueTreePathIndices} = tree.getProof(rogueCommitmentHash);
-     
-     const rogueInputs = {
-         value: rogueValue,
-         oldAllowance: inputs.newAllowance,
-         oldNullifier: n,
-         oldSecret: s,
-         oldNullifierHash: newNullifierHash,
-         oldRoot: newRoot,
-         oldTreeSiblings: newTreeSiblings,
-         oldTreePathIndices: newTreePathIndices,
-         newAllowance: rogueAllowance,
-         newNullifier: rogueN,
-         newSecret: rogueS,
-         newCommitmentHash: rogueCommitmentHash,
-         newRoot: rogueRoot,
-         newTreeSiblings: rogueTreeSiblings,
-         newTreePathIndices: rogueTreePathIndices,
-     };
-         
-     const rogueEncryptedAllowance = ZkTeamClientUser.encryptAllowance(rogueAllowance, rogueK, rogueI);
-     
-     anomalies.push(rogueCommitmentHash);
-     
-     const rogueOp = await userClient.createProvedUserOp({
-         ...rogueInputs,
-         target,
-         encryptedAllowance: rogueEncryptedAllowance,
-         data: rogueData,
-         gasLimit: 1000000 // Bug: the function estimateGas does not give the right result when adding things to do in the contract's execute function
-     });
-     
-     const rogueUoHash = await config.sendUserOp(rogueOp);
-     const rogueTxHash = await userClient.getUserOpReceipt(rogueUoHash);
-     
-     expect(await config.greeter.greet()).to.equal(rogueGreeting);
-     expect(await admin.client.getAllowance(2)).to.be.equal(ethers.utils.parseEther("70"));
-  })
-  
+    })
+
     it("Should allow the admin to detect anomalies", async function () {
         const detectedAnomalies = await admin.client.checkIntegrity(2);
         expect(detectedAnomalies).to.have.all.members(anomalies)
     });
-    
+
     it("Should allow the admin to correct anomalies", async function () {
         await admin.client.discardCommitmentHashes(anomalies);
     });
-    
+  
     it("Should no longer detect any anomaly", async function () {
         const detectedAnomalies = await admin.client.checkIntegrity(2);
         expect(detectedAnomalies).to.have.length(0);
     });
-    
+
     it("Should allow user 0 to use its allowance again", async function () {
         const userKey = await admin.client.getUserKey(0);
         const userClient = new ZkTeamClientUser(ethers.provider, config.accountAddress, userKey, config);

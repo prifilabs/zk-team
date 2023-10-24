@@ -1,12 +1,10 @@
 import { expect } from 'chai'
-
 import { ethers } from "hardhat";
 
-import { deployAll } from "../src/Deploy";
+import { deployAll } from "../src/utils/deploy";
+import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "../src/ZkTeamClient";
 
-import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "../src/ClientAPI";
-
-describe("ZkTeam Admin/Client API", function () {
+describe("ZkTeam Client", function () {
     
     let config;
     let admin;
@@ -80,9 +78,10 @@ describe("ZkTeam Admin/Client API", function () {
      const userClient = new ZkTeamClientUser(ethers.provider, config.accountAddress, userKey, config);     
      const target = config.greeter.address;
      const value = ethers.utils.parseEther("10");
-     const data = config.greeter.interface.encodeFunctionData('setGreeting', ["Bonjour Le Monde!"]);
+     const greeting = "Bonjour Le Monde!";
+     const data = config.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
      const txHash = await userClient.sendTransaction(target, value, data);
-     expect(await config.greeter.greet()).to.equal("Bonjour Le Monde!");
+     expect(await config.greeter.greet()).to.equal(greeting);
      const allowance = await userClient.getAllowance();
      expect(allowance).to.be.equal(ethers.utils.parseEther("90"));  
   })
@@ -92,9 +91,10 @@ describe("ZkTeam Admin/Client API", function () {
      const userClient = new ZkTeamClientUser(ethers.provider, await admin.client.getAccountAddress(), userKey, config);     
      const target = config.greeter.address;
      const value = ethers.utils.parseEther("42");
-     const data = config.greeter.interface.encodeFunctionData('setGreeting', ["Hola Mundo!"]);
+     const greeting = "Hola Mundo!";
+     const data = config.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
      const txHash = await userClient.sendTransaction(target, value, data);
-     expect(await config.greeter.greet()).to.equal("Hola Mundo!");
+     expect(await config.greeter.greet()).to.equal(greeting);
      const allowance = await userClient.getAllowance();
      expect(allowance).to.be.equal(ethers.utils.parseEther("48"));  
   })
@@ -106,5 +106,18 @@ describe("ZkTeam Admin/Client API", function () {
      const userKey = await admin.client.getUserKey(0);
      const userClient = new ZkTeamClientUser(ethers.provider, await admin.client.getAccountAddress(), userKey, config);     
      expect(await userClient.getAllowance()).to.be.equal(ethers.utils.parseEther("100"));
+  })
+  
+  it("Should allow user 0 to use its allowance one more time", async function () {                                     
+     const userKey = await admin.client.getUserKey(0);     
+     const userClient = new ZkTeamClientUser(ethers.provider, await admin.client.getAccountAddress(), userKey, config);     
+     const target = config.greeter.address;
+     const value = ethers.utils.parseEther("18");
+     const greeting = "Ola Mundo!"
+     const data = config.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
+     const txHash = await userClient.sendTransaction(target, value, data);
+     expect(await config.greeter.greet()).to.equal(greeting);
+     const allowance = await userClient.getAllowance();
+     expect(allowance).to.be.equal(ethers.utils.parseEther("82"));  
   })
 })
