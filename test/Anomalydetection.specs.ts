@@ -9,7 +9,7 @@ import { ZkTeamClientAdmin, ZkTeamClientUser, getAccount, getAccounts } from "..
 import { MerkleTree } from "../src/MerkleTree";
 import { poseidon1, poseidon3 } from "poseidon-lite"
 
-describe("Anomaly Detection", function () {
+describe.only("Anomaly Detection", function () {
     
     let config;
     let admin;
@@ -189,6 +189,11 @@ describe("Anomaly Detection", function () {
     
     it("Should allow the admin to correct anomalies", async function () {
         await admin.client.discardCommitmentHashes(anomalies);
+    });
+    
+    it("Should no longer detect any anomaly", async function () {
+        const detectedAnomalies = await admin.client.checkIntegrity(2);
+        expect(detectedAnomalies).to.have.length(0);
     });
     
     it("Should allow user 0 to use its allowance again", async function () {

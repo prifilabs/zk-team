@@ -155,16 +155,16 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
                 const oldTriplet = ZkTeamClient.generateTriplet(userKey, i-1);
                 const newTriplet = ZkTeamClient.generateTriplet(userKey, i);
                 const nullifierHash  = poseidon1([oldTriplet.n]);
-                const log = this.nullifierHashes[nullifierHash];
-                if (!log.verified){
+                const log = this.data.nullifierHashes[nullifierHash];
+                if (!log.verified && !log.discarded){
                     const {allowance} = ZkTeamClient.decryptAllowance(log.encryptedAllowance, oldTriplet.k, oldTriplet.i);
                     const commitmentHash = poseidon3([newTriplet.n, newTriplet.s, allowance]);
                     if (commitmentHash === log.commitmentHash) log.verified = true;
                 }
             }
         }
-        return Object.values(this.nullifierHashes).reduce(function(acc, log){
-            if (!log.verified)  acc.push(log.commitmentHash);
+        return Object.values(this.data.nullifierHashes).reduce(function(acc, log){
+            if (!log.verified && !log.discarded)  acc.push(log.commitmentHash);
             return acc; 
         }, []);
     }
