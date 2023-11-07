@@ -173,16 +173,22 @@ export class ZkTeamCore extends BaseAccountAPI {
     }
     
     async encodeUserOpCallDataAndGasLimit(detailsForUserOp) {
-        var _a, _b;
+
         const callData = await this.encodeExecute(detailsForUserOp);
+        
+        let _b;
         const callGasLimit = (_b = parseNumber(detailsForUserOp.gasLimit)) !== null && _b !== void 0 ? _b : await this.provider.estimateGas({
             from: this.entryPointAddress,
             to: this.getAccountAddress(),
             data: callData
-        });
+        })
+        
+        const initCode = await this.getInitCode()
+        const initGas = await this.estimateCreationGas(initCode)
+        
         return {
             callData,
-            callGasLimit
+            callGasLimit: callGasLimit.add(initGas),
         };
     }
     
@@ -209,7 +215,8 @@ export class ZkTeamCore extends BaseAccountAPI {
     }
     
     async createSignedUserOp(info) {
-        return super.createSignedUserOp({...info, gasLimit: 1000000});
+        const options = {};
+        return super.createSignedUserOp({...info, ...options });
     }
     
     async generateProofInputs(params){
