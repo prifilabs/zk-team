@@ -183,8 +183,11 @@ export class ZkTeamCore extends BaseAccountAPI {
             data: callData
         })
         
-        const initCode = await this.getInitCode()
-        const initGas = await this.estimateCreationGas(initCode)
+        let initGas = BigNumber.from(0);
+        if (await this.checkAccountPhantom()){
+            const initCode = await this.getInitCode()
+            initGas = await this.estimateCreationGas(initCode)
+        }
         
         return {
             callData,
