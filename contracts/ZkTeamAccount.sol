@@ -13,7 +13,8 @@ import "@account-abstraction/contracts/core/BaseAccount.sol";
 import "@account-abstraction/contracts/samples/callback/TokenCallbackHandler.sol";
 
 import "hardhat/console.sol";
-import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
+// import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
+import "./MerkleTree.sol";
 
 import "./ZkTeamVerifier.sol";
 import "poseidon-solidity/PoseidonT2.sol";
@@ -35,14 +36,15 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
 
     address public owner;
     
-    using IncrementalBinaryTree for IncrementalTreeData;
-    IncrementalTreeData public tree;
+    using MerkleTree for MerkleTreeData;
+    MerkleTreeData public tree;
     
     mapping(uint256 => bytes32) public nullifierHashes;
 
     IEntryPoint private immutable _entryPoint;
     Groth16Verifier private immutable _verifier;
     uint256 private immutable _depth = 20;
+    uint256 private immutable _rootHistorySize = 5;
 
     event ZkTeamDiscard(uint256 commitmentHash);
     event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash, bytes32 encryptedAllowance);
@@ -71,7 +73,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
      */
     function initialize(address anOwner) public virtual initializer {
         owner = anOwner;
-        tree.init(_depth, 0);
+        tree.init(_depth, _rootHistorySize);
         tree.insert(42); // Bug: I have no clue why it does not work without this first insert
         emit ZkTeamInit(_entryPoint, owner);
     }
@@ -86,7 +88,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             return 0;
         } else {
             ( uint256[2] memory pi_a, uint256[2][2] memory pi_b, uint256[2] memory pi_c, uint256[6] memory signals ) = abi.decode(userOp.signature, (uint256[2], uint256[2][2], uint256[2], uint256[6]));
-            ( uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value ) = abi.decode(userOp.callData[4:132], (uint256, uint256, uint256, uint256));
+            ( uint256 nullifierHash, uint256 commitmentHash, uint256 value ) = abi.decode(userOp.callData[4:100], (uint256, uint256, uint256));
             // check value matches calldata
             if (value != signals[4]) return SIG_VALIDATION_FAILED;
             // check commitmentHash matches the callData
@@ -96,9 +98,9 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             // check nullifierHash has not been used already
             if (nullifierHashes[nullifierHash] != bytes32(0))  return SIG_VALIDATION_FAILED;
             // check oldRoot 
-            if (tree.root != signals[1])  return SIG_VALIDATION_FAILED;
-            // check newRoot matches the callData
-            if (root != signals[3])  return SIG_VALIDATION_FAILED;
+            if (!tree.isKnownRoot(signals[1])) return SIG_VALIDATION_FAILED;
+            // check newRoot
+            if (signals[3] != tree.simulatedInsert(commitmentHash)) return SIG_VALIDATION_FAILED;
             // check callData hash matches the hash of calldata
             uint hash = PoseidonT2.hash([uint(keccak256(userOp.callData))]);
             if (hash != signals[5])  return SIG_VALIDATION_FAILED;
@@ -123,17 +125,11 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     /**
      * execute a transaction (called directly from owner, or by entryPoint)
      */
-    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 root, uint256 value, bytes32 encryptedAllowance, address dest, bytes calldata data) external {
+    function execute(uint256 nullifierHash, uint256 commitmentHash, uint256 value, bytes32 encryptedAllowance, address dest, bytes calldata data) external {
         _onlyEntryPointOrOwner();
         nullifierHashes[nullifierHash] = encryptedAllowance;
         tree.insert(commitmentHash);
         emit ZkTeamExecution(nullifierHash, commitmentHash, encryptedAllowance);
-        if (root != tree.root){
-            console.log("Tree root mismatch");
-            console.log(tree.root);
-            console.log(root);
-        }
-        require(root == tree.root);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
             console.log("Transaction failed");

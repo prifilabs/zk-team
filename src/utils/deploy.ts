@@ -68,21 +68,21 @@ export async function deployGreeter(){
 }
 
 export async function deployZkTeamFactory(chainId, entryPointAddress){
-    const IncrementalBinaryTreeLibFactory = await ethers.getContractFactory("IncrementalBinaryTree", {
+    const MerkleTreeLibFactory = await ethers.getContractFactory("MerkleTree", {
         libraries: {
             PoseidonT3: PoseidonT3.address
         }
     })
-    const incrementalBinaryTreeLib = await IncrementalBinaryTreeLibFactory.deploy()
+    const MerkleTreeLib = await MerkleTreeLibFactory.deploy()
 
-    await incrementalBinaryTreeLib.deployed()
+    await MerkleTreeLib.deployed()
 
     const ZkTeamVerifier = await ethers.getContractFactory("Groth16Verifier");
     const zkTeamVerifier = await ZkTeamVerifier.deploy();
 
     const zkTeamAccountFactoryFactory = await ethers.getContractFactory("ZkTeamAccountFactory", {        
         libraries: {
-            IncrementalBinaryTree: incrementalBinaryTreeLib.address,
+            MerkleTree: MerkleTreeLib.address,
             PoseidonT2: PoseidonT2.address
     }});
             

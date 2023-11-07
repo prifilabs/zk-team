@@ -96,7 +96,7 @@ export class ZkTeamCore extends BaseAccountAPI {
             if (log.discarded) return BigInt(0);
             else return log.commitmentHash;
         });
-        return [42, ...commitmentHashes];
+        return [42,...commitmentHashes];
     }
     
     async getEncryptedAllowance(nullifierHash){
@@ -165,7 +165,6 @@ export class ZkTeamCore extends BaseAccountAPI {
           [
             detailsForUserOp.oldNullifierHash,
             detailsForUserOp.newCommitmentHash,
-            detailsForUserOp.newRoot,
             value,
             detailsForUserOp.encryptedAllowance,
             detailsForUserOp.target,
