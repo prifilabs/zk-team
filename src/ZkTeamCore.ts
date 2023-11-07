@@ -96,7 +96,7 @@ export class ZkTeamCore extends BaseAccountAPI {
             if (log.discarded) return BigInt(0);
             else return log.commitmentHash;
         });
-        return [42,...commitmentHashes];
+        return [...commitmentHashes];
     }
     
     async getEncryptedAllowance(nullifierHash){
@@ -259,7 +259,7 @@ export class ZkTeamCore extends BaseAccountAPI {
     
     async createProvedUserOp (info) {
         
-        let userOp = await this.createUnsignedUserOp({...info, gasLimit: 1000000});
+        let userOp = await this.createUnsignedUserOp({...info});
 
         // interstingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
         const callDataHash = poseidon1([BigNumber.from(keccak256(userOp.callData)).toBigInt()]);

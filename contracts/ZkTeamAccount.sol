@@ -74,7 +74,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     function initialize(address anOwner) public virtual initializer {
         owner = anOwner;
         tree.init(_depth, _rootHistorySize);
-        tree.insert(42); // Bug: I have no clue why it does not work without this first insert
+        // tree.insert(42); // Bug: I have no clue why it does not work without this first insert
         emit ZkTeamInit(_entryPoint, owner);
     }
     
@@ -97,7 +97,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             if (nullifierHash != signals[0]) return SIG_VALIDATION_FAILED;
             // check nullifierHash has not been used already
             if (nullifierHashes[nullifierHash] != bytes32(0))  return SIG_VALIDATION_FAILED;
-            // check oldRoot 
+            // check oldRoot
             if (!tree.isKnownRoot(signals[1])) return SIG_VALIDATION_FAILED;
             // check newRoot
             if (signals[3] != tree.simulatedInsert(commitmentHash)) return SIG_VALIDATION_FAILED;

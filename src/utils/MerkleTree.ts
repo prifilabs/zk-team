@@ -12,6 +12,7 @@ export class MerkleTree{
     }
     
     public getRoot(){
+        
         return this.tree.root;
     }
     

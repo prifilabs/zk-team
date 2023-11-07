@@ -3,6 +3,8 @@ pragma solidity ^0.8.4;
 
 import {PoseidonT3} from "poseidon-solidity/PoseidonT3.sol";
 
+import "hardhat/console.sol";
+
 // Each incremental tree has certain properties and data that will
 // be used to add new leaves.
 struct MerkleTreeData {
@@ -105,8 +107,18 @@ library MerkleTree {
         require(rootHistorySize > 0 && rootHistorySize <= depth, "MerkleTree: tree rootHistorySize must be between 1 and tree depth");
 
         self.depth = depth;        
-        self.roots[0] = defaultZero(depth);
         self.rootHistorySize = rootHistorySize;
+        self.roots[0] = defaultZero(depth);
+        
+        uint256 index = self.numberOfLeaves;
+        for (uint8 i = 0; i < depth; ) {
+            self.lastSubtrees[i] = [defaultZero(i), defaultZero(i)];
+            index >>= 1;
+
+            unchecked {
+                ++i;
+            }
+        }
     }
 
     /// @dev Inserts a leaf in the tree.
@@ -140,6 +152,11 @@ library MerkleTree {
         }
         return hash;
     }
+    
+    function getLastRoot(MerkleTreeData storage self) public view returns (uint256) {
+        return self.roots[self.numberOfLeaves % self.rootHistorySize];
+    }
+    
 
     /// @dev Inserts a leaf in the tree.
     /// @param self: Tree data.
@@ -159,7 +176,7 @@ library MerkleTree {
             } else {
                 self.lastSubtrees[i][1] = hash;
             }
-
+            
             hash = PoseidonT3.hash(self.lastSubtrees[i]);
             index >>= 1;
 
