@@ -4,8 +4,9 @@ import { resolve } from "path";
 import { BigNumber, BigNumberish, Contract, constants } from 'ethers'
 import { arrayify, hexConcat, keccak256, defaultAbiCoder } from 'ethers/lib/utils'
 
-import { BaseAccountAPI } from '@account-abstraction/sdk'
+import { BaseAccountAPI, DefaultGasOverheads } from '@account-abstraction/sdk'
 
+import * as EntryPoint from '@account-abstraction/contracts/artifacts/EntryPoint.json';
 import * as ZkTeamAccountFactory from '../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json';
 import * as ZkTeamAccount from '../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json';
 
@@ -15,6 +16,8 @@ import { wasm as wasm_tester} from "circom_tester";
 import { MerkleTree } from "./utils/MerkleTree";
 import { encryptAllowance, decryptAllowance } from "./utils/encryption";
 import { poseidon1, poseidon3 } from "poseidon-lite"
+
+import { HttpRpcClient } from '@account-abstraction/sdk'
 
 import AsyncLock from 'async-lock';
 
@@ -40,9 +43,11 @@ export class ZkTeamCore extends BaseAccountAPI {
     
     constructor(params: ZkTeamCoreParams) {
         var _a;
-        super(params);
+        const overheads = {sigSize: 1000, zeroByte: DefaultGasOverheads.nonZeroByte }
+        super({...params, overheads});
         this.signer = params.signer;
         this.factoryAddress = params.factoryAddress;
+        this.bundler = params.bundler;
         this.index = BigNumber.from((_a = params.index) !== null && _a !== void 0 ? _a : 0);
         this.data = {
             lock: new AsyncLock(),
@@ -113,8 +118,7 @@ export class ZkTeamCore extends BaseAccountAPI {
     
     async getAccountContract() {
         if (this.accountContract == null) {
-            const signerOrProvider = (this.signer)? this.signer : this.provider;
-            this.accountContract = new Contract(await this.getAccountAddress(), ZkTeamAccount.abi, signerOrProvider);
+            this.accountContract = new Contract(await this.getAccountAddress(), ZkTeamAccount.abi, this.provider);
         }
         return this.accountContract;
     }
@@ -203,7 +207,7 @@ export class ZkTeamCore extends BaseAccountAPI {
         const tree = new MerkleTree(commitmentHashes);
         tree.insert(newCommitmentHash);
         const newRoot = tree.getRoot();
-        const encryptedAllowance = encryptAllowance(newAllowance, params.newKey, params.newNonce, params.newPadding);
+        const encryptedAllowance = encryptAllowance(newAllowance, params.newKey, params.newNonce);
         return  { 
             newAllowance, 
             oldNullifierHash, 
@@ -214,17 +218,19 @@ export class ZkTeamCore extends BaseAccountAPI {
     }
     
     async signUserOpHash(userOpHash) {
-        return await this.signer.signMessage((0, arrayify)(userOpHash));
+        return this.signer.signMessage((0, arrayify)(userOpHash));
     }
     
-    async createSignedUserOp(info) {
-        const options = {};
-        return super.createSignedUserOp({...info, ...options });
+    async createUnsignedUserOp(info) {
+        const op = await super.createUnsignedUserOp(info);
+        const signer = ethers.Wallet.createRandom();
+        op.signature = signer.signMessage('');
+        return op;
     }
     
     async generateProofInputs(params){
         const value = params.value;
-        const {padding: oldPadding, allowance: oldAllowance} = await this.getDecryptedAllowance(params.oldNullifierHash, params.oldKey, params.oldNonce);
+        const oldAllowance = await this.getDecryptedAllowance(params.oldNullifierHash, params.oldKey, params.oldNonce);
         
         const oldNullifierHash  = ZkTeamCore.getNullifierHash(params.oldNullifier);
         const oldCommitmentHash = ZkTeamCore.getCommitmentHash(params.oldNullifier, params.oldSecret, oldAllowance);
@@ -242,12 +248,11 @@ export class ZkTeamCore extends BaseAccountAPI {
         const newRoot = tree.getRoot();
         const { treeSiblings:newTreeSiblings, treePathIndices: newTreePathIndices} = tree.getProof(newCommitmentHash);
         
-        const encryptedAllowance = encryptAllowance(newAllowance, params.newKey, params.newNonce, params.newPadding);
+        const encryptedAllowance = encryptAllowance(newAllowance, params.newKey, params.newNonce);
         
         return { 
             value, 
             oldAllowance, 
-            oldPadding,
             oldNullifier: params.oldNullifier,
             oldSecret: params.oldSecret,
             oldNullifierHash, 
@@ -321,6 +326,23 @@ export class ZkTeamCore extends BaseAccountAPI {
         }
     }
     
+    public async sendUserOp(op){
+        const chainId = (await ethers.provider.getNetwork()).chainId;
+        if (chainId == 31337){
+            const EntryPointFactory = await ethers.getContractFactory(EntryPoint.abi, EntryPoint.bytecode);
+            const entrypoint = EntryPointFactory.attach(this.entryPointAddress);
+            await entrypoint.handleOps([op], this.bundler.address);
+            return entrypoint.getUserOpHash(op);
+        }else{
+            const client = new HttpRpcClient(
+                  this.bundler.url,
+                  this.entryPointAddress,
+                  chainId
+            );
+            return client.sendUserOpToBundler(op); 
+        }
+    }
+    
     public async discardCommitmentHashes(commitmentHashes){
         const tree = new MerkleTree(await this.getCommitmentHashes());
         const commitmentHashList = [];
@@ -330,6 +352,6 @@ export class ZkTeamCore extends BaseAccountAPI {
             tree.discard(commitmentHash);
         }
         const contract = await this.getAccountContract();
-        return contract.discardCommitmentHashes(commitmentHashList);
+        return contract.connect(this.signer).discardCommitmentHashes(commitmentHashList);
     }
 }

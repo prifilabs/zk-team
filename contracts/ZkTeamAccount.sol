@@ -12,12 +12,12 @@ import "@openzeppelin/contracts/proxy/utils/UUPSUpgradeable.sol";
 import "@account-abstraction/contracts/core/BaseAccount.sol";
 import "@account-abstraction/contracts/samples/callback/TokenCallbackHandler.sol";
 
-import "hardhat/console.sol";
-// import "@zk-kit/incremental-merkle-tree.sol/IncrementalBinaryTree.sol";
 import "./MerkleTree.sol";
 
 import "./ZkTeamVerifier.sol";
 import "poseidon-solidity/PoseidonT2.sol";
+
+import "hardhat/console.sol";
 
 struct CommitmentHashInfo {
     uint256 commitmentHash;
@@ -105,8 +105,8 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             uint hash = PoseidonT2.hash([uint(keccak256(userOp.callData))]);
             if (hash != signals[5])  return SIG_VALIDATION_FAILED;
             // check the proof
-            bool res = _verifier.verifyProof(pi_a, pi_b, pi_c, signals);
-            if (!res) return SIG_VALIDATION_FAILED;
+            (bool valid, ) = address(_verifier).staticcall(abi.encodeWithSelector(Groth16Verifier.verifyProof.selector, pi_a, pi_b, pi_c, signals));
+            if (!valid) return SIG_VALIDATION_FAILED;
             // finally
             return 0;
         }
@@ -132,7 +132,6 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         emit ZkTeamExecution(nullifierHash, commitmentHash, encryptedAllowance);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
-            console.log("Transaction failed");
             assembly {
                 revert(add(result, 32), mload(result))
             }

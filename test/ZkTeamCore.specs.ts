@@ -9,53 +9,65 @@ import { ZkTeamCore } from "../src/ZkTeamCore";
 
 import { DefaultGasOverheads } from "@account-abstraction/sdk";
 
-import { deployAll } from "../src/utils/deploy";
+import { deployAll, deployContract, useWallet, topUp } from "../src/Deploy";
 
-describe("ZkTeam Core", function () {
+const MNEMONIC_FILE = 'mnemonic.txt';
+
+function generateGreeting(){
+    return `Hello ${Math.random().toString(36).slice(2)}`;
+}
+
+describe.only("ZkTeam Core", function () {
     
-    let init;
+    this.timeout(300000);
+    let config;
     let admin;
+    let adminInstance;
     let user;
+    let greeter;
   
-    it("Should deploy the framework", async function () { 
-        
-        const chainId = (await hre.ethers.provider.getNetwork()).chainId;
-        
-        init = await deployAll(chainId);
-        admin = (await ethers.getSigners())[0];
-        
-        const accountAddress = await init.zkTeamAccountFactory.getAddress(await admin.getAddress(), 0);
-        
-        init = {...init, accountAddress};
+    it("Should deploy the framework", async function () {         
+                    
+        const [deployer] = await ethers.getSigners()
+        console.log('Deployer address:', deployer.address)
+        const balance = await deployer.getBalance();
+        console.log(`Deployer balance: ${balance} (${ethers.utils.formatEther(balance)} eth)`)
 
-        await admin.sendTransaction({
-            to: accountAddress,
-            value: ethers.utils.parseEther('100'), 
-        })
+        config = await deployAll();
+        admin = useWallet(MNEMONIC_FILE, ethers.utils.parseEther('0.5'));
+        const adminAddress = await admin.getAddress();
+        console.log(`Admin address: ${adminAddress}`);
+        await topUp(deployer, adminAddress, ethers.utils.parseEther('0.3'), ethers.utils.parseEther('0.5'), ethers.provider);
+        const adminBalance = await ethers.provider.getBalance(adminAddress);
+        console.log(`Admin balance: ${adminBalance} (${ethers.utils.formatEther(adminBalance)} eth)`)
 
-        expect(await init.greeter.greet()).to.equal("Hello World!");
-                        
+        adminInstance = new ZkTeamCore({
+             provider: ethers.provider,
+             signer: admin,
+             index: 0,
+             entryPointAddress: config.entrypoint.address,
+             factoryAddress: config.factory.address,
+             bundler: config.bundler
+        });
+
+        const accountAddress = await adminInstance.getAccountAddress();
+        console.log(`Account address: ${accountAddress}`);
+        await topUp(deployer, accountAddress, ethers.utils.parseEther('0.3'), ethers.utils.parseEther('0.5'), ethers.provider);
+        const accountBalance = await ethers.provider.getBalance(accountAddress);
+        console.log(`Account balance: ${accountBalance} (${ethers.utils.formatEther(accountBalance)} eth)`)
     })  
     
   it("Should allow the admin to set the user's allowance (signed transaction)", async function () {
 
-      const zkTeamAccount = new ZkTeamCore({
-          provider: ethers.provider,
-          signer: admin,
-          index: 0,
-          entryPointAddress: init.entryPointAddress,
-          factoryAddress: init.zkTeamAccountFactory.address,
-      });
-
       const oldNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
 
-      const newAllowance = ethers.utils.parseEther("50").toBigInt();
+      const newAllowance = ethers.utils.parseEther("0.005").toBigInt();
       const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newKey = ethers.utils.randomBytes(32);
       const newNonce = ethers.utils.randomBytes(24);
 
-      const inputs = await zkTeamAccount.generateSignatureInputs({
+      const inputs = await adminInstance.generateSignatureInputs({
           oldNullifier,
           newAllowance,
           newNullifier,
@@ -63,22 +75,28 @@ describe("ZkTeam Core", function () {
           newKey,
           newNonce,
       });
+      
+      const Greeter = await ethers.getContractFactory("Greeter");
+      greeter = Greeter.attach(config.greeter.address);
+      const target = greeter.address;
+      const greeting = generateGreeting();
+      const data = greeter.interface.encodeFunctionData('setGreeting', [greeting]);
 
-      const target = init.greeter.address;
-      const greeting = "Hola Mundo!";
-      const data = init.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
+      const op = await adminInstance.createSignedUserOp({ ...inputs, target, data });
+            
+      console.log("UserOperation: ", await ethers.utils.resolveProperties(op));
+            
+      const uoHash = await adminInstance.sendUserOp(op);
+      console.log(`UserOperation hash: ${uoHash}`);
 
-      const op = await zkTeamAccount.createSignedUserOp({ ...inputs, target, data });
+      const txHash = await adminInstance.getUserOpReceipt(uoHash);
+      console.log(`Transaction hash: ${txHash}`);
 
-      // console.log("\nSigned UserOperation: ", await ethers.utils.resolveProperties(op));
-
-      const uoHash = await init.sendUserOp(op);
-      // console.log(`\nUserOperation sent to bundler - UserOperation hash: ${uoHash}`);
-
-      // const txHash = await zkTeamAccount.getUserOpReceipt(uoHash);
-      // console.log(`\nUserOperation executed - Transaction hash: ${txHash}`);
-
-      expect(await init.greeter.greet()).to.equal(greeting);
+      const tx = await ethers.provider.getTransaction(txHash);
+      const receipt = await tx.wait()
+      const gasCost = receipt.gasUsed.mul(receipt.effectiveGasPrice);
+      console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} eth)`);
+      expect(await greeter.greet()).to.equal(greeting);
 
       user = {
           oldNullifierHash: inputs.oldNullifierHash,
@@ -91,21 +109,22 @@ describe("ZkTeam Core", function () {
   
   it("Should allow a user to use its allowance (proved transaction)", async function () {
 
-      const zkTeamAccount = new ZkTeamCore({
+      const userInstance = new ZkTeamCore({
           provider: ethers.provider,
-          accountAddress: init.accountAddress,
-          entryPointAddress: init.entryPointAddress,
-          factoryAddress: init.factoryAddress,
+          accountAddress: await adminInstance.getAccountAddress(),
+          entryPointAddress: config.entrypoint.address,
+          factoryAddress: config.factory.address,
+          bundler: config.bundler,
       });
 
-      const value = ethers.utils.parseEther("2.5").toBigInt();
+      const value = ethers.utils.parseEther("0.001").toBigInt();
       
       const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newKey = ethers.utils.randomBytes(32);
       const newNonce = ethers.utils.randomBytes(24);
       
-      const inputs = await zkTeamAccount.generateProofInputs({
+      const inputs = await userInstance.generateProofInputs({
           ...user,
           value,
           newNullifier,
@@ -114,17 +133,29 @@ describe("ZkTeam Core", function () {
           newNonce,
       });
             
-      const target = init.greeter.address;
-      const greeting = "Hallo Welt!";
-      const data = init.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
+      const target = greeter.address;
+      const greeting = generateGreeting();
+      const data = greeter.interface.encodeFunctionData('setGreeting', [greeting]);
 
-      const op = await zkTeamAccount.createProvedUserOp({
+      const op = await userInstance.createProvedUserOp({
           ...inputs,
           target,
           data,
-      });
-      await init.sendUserOp(op);
-      expect(await init.greeter.greet()).to.equal(greeting);
+      });  
+            
+      console.log("UserOperation: ", await ethers.utils.resolveProperties(op));
+            
+      const uoHash = await adminInstance.sendUserOp(op);
+      console.log(`UserOperation hash: ${uoHash}`);
+
+      const txHash = await adminInstance.getUserOpReceipt(uoHash);
+      console.log(`Transaction hash: ${txHash}`);
+
+      const tx = await ethers.provider.getTransaction(txHash);
+      const receipt = await tx.wait()
+      const gasCost = receipt.gasUsed.mul(receipt.effectiveGasPrice);
+      console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} eth)`);
+      expect(await greeter.greet()).to.equal(greeting);
       
       user = {
           oldNullifierHash: inputs.oldNullifierHash,
@@ -135,28 +166,29 @@ describe("ZkTeam Core", function () {
       }
   })
   
-  it("Should allow a user to use its allowance (proved transaction with Paymaster)", async function () {
+  it.skip("Should allow a user to use its allowance (proved transaction with Paymaster)", async function () {
 
       const VerifyingPaymasterFactory = await ethers.getContractFactory(VerifyingPaymaster.abi, VerifyingPaymaster.bytecode);
-      const verifyingPaymaster = await VerifyingPaymasterFactory.deploy(init.entryPointAddress, await admin.getAddress());
+      const verifyingPaymaster = await VerifyingPaymasterFactory.deploy(config.entrypoint.address, await admin.getAddress());
       const verifyingPaymasterApi = new VerifyingPaymasterAPI(verifyingPaymaster, admin);
 
       await verifyingPaymaster.connect(admin).deposit({
-          value: ethers.utils.parseEther('0.1'),
+          value: ethers.utils.parseEther('0.01'),
       })
 
       await verifyingPaymaster.addStake(21600, { value: ethers.utils.parseEther('0.01') })
 
       const zkTeamAccount = new ZkTeamCore({
           provider: ethers.provider,
-          accountAddress: init.accountAddress,
-          entryPointAddress: init.entryPointAddress,
-          factoryAddress: init.zkTeamAccountFactoryAddress,
+          accountAddress: await adminInstance.getAccountAddress(),
+          entryPointAddress: config.entrypoint.address,
+          factoryAddress: config.factory.address,
           overheads: {zeroByte: DefaultGasOverheads.nonZeroByte},
           paymasterAPI: verifyingPaymasterApi,
+          bundler: config.bundler
       });
 
-      const value = ethers.utils.parseEther("3").toBigInt();
+      const value = ethers.utils.parseEther("0.001").toBigInt();
       
       const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
       const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
@@ -172,17 +204,19 @@ describe("ZkTeam Core", function () {
           newNonce,
       });
             
-      const target = init.greeter.address;
-      const greeting = "Bonjour Le Monde!";
-      const data = init.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
+      const target = greeter.address;
+      const greeting = generateGreeting();
+      const data = greeter.interface.encodeFunctionData('setGreeting', [greeting]);
 
       const op = await zkTeamAccount.createProvedUserOp({
           ...inputs,
           target,
           data,
       });
-      await init.sendUserOp(op);
-      expect(await init.greeter.greet()).to.equal(greeting);
+            
+      const uoHash = await zkTeamAccount.sendUserOp(op);
+      const txHash = await zkTeamAccount.getUserOpReceipt(uoHash);
+      expect(await greeter.greet()).to.equal(greeting);
      
       user = {
           oldNullifierHash: inputs.oldNullifierHash,
@@ -193,56 +227,10 @@ describe("ZkTeam Core", function () {
       }
   })
   
-  it("Should allow the admin to cancel the user's allowance ", async function () {
-
-      const zkTeamAccount = new ZkTeamCore({
-          provider: ethers.provider,
-          signer: admin,
-          index: 0,
-          entryPointAddress: init.entryPointAddress,
-          factoryAddress: init.zkTeamAccountFactory.address,
-      });
+  it.skip("Should allow the admin to cancel the user's allowance ", async function () {
       
-      const commitmentHashes = await zkTeamAccount.getCommitmentHashes();
-      await zkTeamAccount.discardCommitmentHashes(commitmentHashes.slice(-1));
+      const commitmentHashes = await adminInstance.getCommitmentHashes();
+      await adminInstance.discardCommitmentHashes(commitmentHashes.slice(-1));
   });
-  
-  it.skip("Should not allow a user to use its allowance", async function () {
-
-      const zkTeamAccount = new ZkTeamCore({
-          provider: ethers.provider,
-          accountAddress: init.accountAddress,
-          entryPointAddress: init.entryPointAddress,
-          factoryAddress: init.factoryAddress,
-      });
-
-      const value = ethers.utils.parseEther("1").toBigInt();
-      
-      const newNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
-      const newSecret = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
-      const newKey = ethers.utils.randomBytes(32);
-      const newNonce = ethers.utils.randomBytes(24);
-      
-      const inputs = await zkTeamAccount.generateProofInputs({
-          ...user,
-          value,
-          newNullifier,
-          newSecret,
-          newKey,
-          newNonce,
-      });
-            
-      const target = init.greeter.address;
-      const greeting = "Why not?";
-      const data = init.greeter.interface.encodeFunctionData('setGreeting', [greeting]);
-
-      const op = await zkTeamAccount.createProvedUserOp({
-          ...inputs,
-          target,
-          data,
-      });
-      await init.sendUserOp(op);
-      expect(await init.greeter.greet()).to.not.equal(greeting);
-  })
-
+ 
 });

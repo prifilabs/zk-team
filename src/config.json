@@ -1,0 +1,52 @@
+{
+  "1337": {
+    "chaindId": "1337",
+    "entrypoint": {
+      "address": "0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789"
+    },
+    "bundler": {
+      "url": "http://localhost:3000/rpc"
+    },
+    "greeter": {
+      "address": "0xBdE0cB50431633Fce2830DfdD2a1E1B26587308C",
+      "hash": "66bbcf17b7fea5998ae7e89d16546bf15ac6ca6af280e77287a251f31bffb502"
+    },
+    "verifier": {
+      "address": "0xCc17165A940f63f5b2c98863849950712D9a386A",
+      "hash": "ee82b07f629cfccc738cbd57fce789128ed675fdce9a0925aa7224f065863005"
+    },
+    "merkle": {
+      "address": "0x5d526F928a983E0367a34b93fd8a727ef50b2657",
+      "hash": "5c10d8a79a4d9b32cafd33e0b39e3123b0f8a17ad5ff17f4cb8c4082aad94ad4"
+    },
+    "factory": {
+      "address": "0x382f05877a26647C7C8faf7fe5c53f04fC8f21Dc",
+      "hash": "2fe2383c271d8e62769bbbd57e49bca64c168af5afd0fcac1a5aa34ed012f337"
+    }
+  },
+  "11155111": {
+    "chaindId": "11155111",
+    "entrypoint": {
+      "address": "0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789"
+    },
+    "bundler": {
+      "url": "https://public.stackup.sh/api/v1/node/ethereum-sepolia"
+    },
+    "greeter": {
+      "address": "0x3551Df902a421f8d36C9007bd2fA4446Ea3a70C9",
+      "hash": "66bbcf17b7fea5998ae7e89d16546bf15ac6ca6af280e77287a251f31bffb502"
+    },
+    "verifier": {
+      "address": "0x8ecB43D2586660ef19C30Df1BAC91dAADF18f173",
+      "hash": "2afc6c8890e52f2a5b6c7b3f1bc6e8829b6705dfd1d3e0a1fb51da57d15b35cc"
+    },
+    "merkle": {
+      "address": "0x7012119C0303e26d2Af5400B3dFFccE7DaC7cEd5",
+      "hash": "5c10d8a79a4d9b32cafd33e0b39e3123b0f8a17ad5ff17f4cb8c4082aad94ad4"
+    },
+    "factory": {
+      "address": "0x8663C064C13D338416f3389EfaD5741218eFD35a",
+      "hash": "b167dbf47ff4f9d5fa5a4e7d65f1a48973d43bdbafc7b2b1939be53f8ee12185"
+    }
+  }
+}
