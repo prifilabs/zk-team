@@ -9,6 +9,7 @@ import { BaseAccountAPI, DefaultGasOverheads } from '@account-abstraction/sdk'
 import * as EntryPoint from '@account-abstraction/contracts/artifacts/EntryPoint.json';
 import * as ZkTeamAccountFactory from '../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json';
 import * as ZkTeamAccount from '../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json';
+import { PoseidonT2 } from "poseidon-solidity";
 
 import { groth16 } from "snarkjs";
 import { wasm as wasm_tester} from "circom_tester";
@@ -27,6 +28,26 @@ function parseNumber(a) {
     return BigNumber.from(a.toString());
 }
 
+// export function getConfig(provider, chaindId?){
+//     if (chaindId === undefined){
+//         chainId = (await provider.getNetwork()).chainId;
+//     }
+//     const filename = resolve(join('config', `${chainId}.json`));
+//     if (!existsSync(filename)){
+//         throw new Error(`Config file does not exsits for chain ${chaindId}`);
+//     }
+//     return JSON.parse(readFileSync(filename, 'utf-8'));
+// }
+
+export async function getFactory(config){
+    const Factory = await ethers.getContractFactory("ZkTeamAccountFactory", {        
+        libraries: {
+            MerkleTree: config.merkle.address,
+            PoseidonT2: PoseidonT2.address
+    }});
+    return Factory.attach(config.factory.address);
+}
+
 /**
  * constructor params, added no top of base params:
  * @param signer only needed for the admin
@@ -42,6 +63,7 @@ export interface ZkTeamCoreParams extends BaseApiParams {
 export class ZkTeamCore extends BaseAccountAPI {
     
     constructor(params: ZkTeamCoreParams) {
+        console.log(params);
         var _a;
         const overheads = {sigSize: 1000, zeroByte: DefaultGasOverheads.nonZeroByte }
         super({...params, overheads});

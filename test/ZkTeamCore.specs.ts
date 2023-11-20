@@ -1,25 +1,62 @@
+import { readFileSync, existsSync, writeFileSync } from "fs";
 import { expect } from 'chai'
 
 import { ethers } from "hardhat";
 
+import * as ZkTeamAccountFactory from '@account-abstraction/contracts/artifacts/ZkTeamAccountFactory.json';
 import * as VerifyingPaymaster from '@account-abstraction/contracts/artifacts/VerifyingPaymaster.json';
 
 import { VerifyingPaymasterAPI } from "../src/utils/VerifyingPaymasterAPI";
-import { ZkTeamCore } from "../src/ZkTeamCore";
+import { ZkTeamCore, getFactory } from "../src/ZkTeamCore";
 
 import { DefaultGasOverheads } from "@account-abstraction/sdk";
 
-import { deployAll, deployContract, useWallet, topUp } from "../src/Deploy";
+import { deployAll } from "../scripts/deploy"
 
-const MNEMONIC_FILE = 'mnemonic.txt';
+async function topUp(from, address, minimumAmount, maximumAmount, provider){
+    const balance = await provider.getBalance(address);
+    if (balance.gte(minimumAmount)) return;
+    const amount = maximumAmount.sub(balance);
+    console.log(`Sending ${amount} to ${address}`)
+    const tx = await from.sendTransaction({
+        to: address,
+        value: amount
+    });
+    return tx.wait();
+}
 
-function generateGreeting(){
+export async function setAdminAccount(deployer, config){
+    let admin;
+    const filename = 'mnemonic.txt';
+    if (existsSync(filename)){
+        admin = ethers.Wallet.fromMnemonic(readFileSync(filename, 'utf-8'));
+    }else{
+        admin = ethers.Wallet.createRandom().connect(ethers.provider);
+        writeFileSync(filename, wallet.mnemonic.phrase, 'utf-8');
+    }
+    const adminAddress = await admin.getAddress();
+    console.log(`Admin address: ${adminAddress}`);
+    await topUp(deployer, adminAddress, ethers.utils.parseEther('0.3'), ethers.utils.parseEther('0.5'), ethers.provider);
+    const adminBalance = await ethers.provider.getBalance(adminAddress);
+    console.log(`Admin balance: ${adminBalance} (${ethers.utils.formatEther(adminBalance)} eth)`)
+    
+    const factory = await getFactory(config);
+    const accountAddress = await factory.getAddress(admin.address, 0);
+    console.log(`Account #0 address: ${accountAddress}`);
+    await topUp(deployer, accountAddress, ethers.utils.parseEther('0.3'), ethers.utils.parseEther('0.5'), ethers.provider);
+    const accountBalance = await ethers.provider.getBalance(accountAddress);
+    console.log(`Account #0 balance: ${accountBalance} (${ethers.utils.formatEther(accountBalance)} eth)`)
+    
+    return admin;
+}
+
+export function generateGreeting(){
     return `Hello ${Math.random().toString(36).slice(2)}`;
 }
 
-describe.only("ZkTeam Core", function () {
+describe("ZkTeam Core", function () {
     
-    this.timeout(300000);
+    this.timeout(100000);
     let config;
     let admin;
     let adminInstance;
@@ -27,37 +64,21 @@ describe.only("ZkTeam Core", function () {
     let greeter;
   
     it("Should deploy the framework", async function () {         
-                    
         const [deployer] = await ethers.getSigners()
-        console.log('Deployer address:', deployer.address)
-        const balance = await deployer.getBalance();
-        console.log(`Deployer balance: ${balance} (${ethers.utils.formatEther(balance)} eth)`)
-
         config = await deployAll();
-        admin = useWallet(MNEMONIC_FILE, ethers.utils.parseEther('0.5'));
-        const adminAddress = await admin.getAddress();
-        console.log(`Admin address: ${adminAddress}`);
-        await topUp(deployer, adminAddress, ethers.utils.parseEther('0.3'), ethers.utils.parseEther('0.5'), ethers.provider);
-        const adminBalance = await ethers.provider.getBalance(adminAddress);
-        console.log(`Admin balance: ${adminBalance} (${ethers.utils.formatEther(adminBalance)} eth)`)
-
-        adminInstance = new ZkTeamCore({
-             provider: ethers.provider,
-             signer: admin,
-             index: 0,
-             entryPointAddress: config.entrypoint.address,
-             factoryAddress: config.factory.address,
-             bundler: config.bundler
-        });
-
-        const accountAddress = await adminInstance.getAccountAddress();
-        console.log(`Account address: ${accountAddress}`);
-        await topUp(deployer, accountAddress, ethers.utils.parseEther('0.3'), ethers.utils.parseEther('0.5'), ethers.provider);
-        const accountBalance = await ethers.provider.getBalance(accountAddress);
-        console.log(`Account balance: ${accountBalance} (${ethers.utils.formatEther(accountBalance)} eth)`)
+        admin = await setAdminAccount(deployer, config);
     })  
     
-  it("Should allow the admin to set the user's allowance (signed transaction)", async function () {
+    it("Should allow the admin to set the user's allowance (signed transaction)", async function () {
+
+      adminInstance = new ZkTeamCore({
+           provider: ethers.provider,
+           signer: admin,
+           index: 0,
+           entryPointAddress: config.entrypoint.address,
+           factoryAddress: config.factory.address,
+           bundler: config.bundler
+      });
 
       const oldNullifier = ethers.BigNumber.from(ethers.utils.randomBytes(32)).toBigInt();
 
@@ -84,7 +105,7 @@ describe.only("ZkTeam Core", function () {
 
       const op = await adminInstance.createSignedUserOp({ ...inputs, target, data });
             
-      console.log("UserOperation: ", await ethers.utils.resolveProperties(op));
+      // console.log("UserOperation: ", await ethers.utils.resolveProperties(op));
             
       const uoHash = await adminInstance.sendUserOp(op);
       console.log(`UserOperation hash: ${uoHash}`);
@@ -143,7 +164,7 @@ describe.only("ZkTeam Core", function () {
           data,
       });  
             
-      console.log("UserOperation: ", await ethers.utils.resolveProperties(op));
+      // console.log("UserOperation: ", await ethers.utils.resolveProperties(op));
             
       const uoHash = await adminInstance.sendUserOp(op);
       console.log(`UserOperation hash: ${uoHash}`);

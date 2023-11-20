@@ -17,7 +17,7 @@ import "./MerkleTree.sol";
 import "./ZkTeamVerifier.sol";
 import "poseidon-solidity/PoseidonT2.sol";
 
-import "hardhat/console.sol";
+// import "hardhat/console.sol";
 
 struct CommitmentHashInfo {
     uint256 commitmentHash;
