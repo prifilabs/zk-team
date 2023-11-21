@@ -1,10 +1,9 @@
 {
-    "name": "@prifilabs/zk-team-js",
-    "version": "0.0.1",
+    "name": "@prifilabs/zk-team",
+    "version": "1.0.0",
     "description": "Privacy-Preserving Account-Abstraction for Teams",
     "main": "lib/src/index.js",
     "scripts": {
-        "circom": "",
         "build": "npx tsc",
         "test": "npx hardhat test",
         "coverage": "c8 npx hardhat coverage"
@@ -25,7 +24,9 @@
         "@nomiclabs/hardhat-waffle": "^2.0.6",
         "@typechain/ethers-v5": "^7.2.0",
         "@typechain/hardhat": "^2.3.1",
+        "@types/async-lock": "^1.4.2",
         "@types/mocha": "^10.0.1",
+        "@types/snarkjs": "^0.7.7",
         "@typescript-eslint/eslint-plugin": "^4.33.0",
         "@typescript-eslint/parser": "^4.33.0",
         "c8": "^8.0.1",
