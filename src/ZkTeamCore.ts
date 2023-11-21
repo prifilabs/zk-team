@@ -28,26 +28,6 @@ function parseNumber(a) {
     return BigNumber.from(a.toString());
 }
 
-// export function getConfig(provider, chaindId?){
-//     if (chaindId === undefined){
-//         chainId = (await provider.getNetwork()).chainId;
-//     }
-//     const filename = resolve(join('config', `${chainId}.json`));
-//     if (!existsSync(filename)){
-//         throw new Error(`Config file does not exsits for chain ${chaindId}`);
-//     }
-//     return JSON.parse(readFileSync(filename, 'utf-8'));
-// }
-
-export async function getFactory(config){
-    const Factory = await ethers.getContractFactory("ZkTeamAccountFactory", {        
-        libraries: {
-            MerkleTree: config.merkle.address,
-            PoseidonT2: PoseidonT2.address
-    }});
-    return Factory.attach(config.factory.address);
-}
-
 /**
  * constructor params, added no top of base params:
  * @param signer only needed for the admin
@@ -63,7 +43,6 @@ export interface ZkTeamCoreParams extends BaseApiParams {
 export class ZkTeamCore extends BaseAccountAPI {
     
     constructor(params: ZkTeamCoreParams) {
-        console.log(params);
         var _a;
         const overheads = {sigSize: 1000, zeroByte: DefaultGasOverheads.nonZeroByte }
         super({...params, overheads});
@@ -374,6 +353,14 @@ export class ZkTeamCore extends BaseAccountAPI {
             tree.discard(commitmentHash);
         }
         const contract = await this.getAccountContract();
-        return contract.connect(this.signer).discardCommitmentHashes(commitmentHashList);
+        const txHashes = [];
+        let sub = commitmentHashList.splice(0, 5);
+        do{
+            const tx = await contract.connect(this.signer).discardCommitmentHashes(sub);
+            await tx.wait();
+            txHashes.push(tx.hash);
+            sub = commitmentHashList.splice(0, 5);
+        } while(sub.length>0);
+        return txHashes;
     }
 }

@@ -1,0 +1,25 @@
+{
+  "chainId": "11155111",
+  "entrypoint": {
+    "address": "0x5ff137d4b0fdcd49dca30c7cf57e578a026d2789"
+  },
+  "bundler": {
+    "url": "https://public.stackup.sh/api/v1/node/ethereum-sepolia"
+  },
+  "greeter": {
+    "address": "0x3551Df902a421f8d36C9007bd2fA4446Ea3a70C9",
+    "hash": "66bbcf17b7fea5998ae7e89d16546bf15ac6ca6af280e77287a251f31bffb502"
+  },
+  "verifier": {
+    "address": "0xF780B83Fa3cF24C5C5Cc77266bF6FF34F3D3Ccd7",
+    "hash": "ee82b07f629cfccc738cbd57fce789128ed675fdce9a0925aa7224f065863005"
+  },
+  "merkle": {
+    "address": "0x7012119C0303e26d2Af5400B3dFFccE7DaC7cEd5",
+    "hash": "5c10d8a79a4d9b32cafd33e0b39e3123b0f8a17ad5ff17f4cb8c4082aad94ad4"
+  },
+  "factory": {
+    "address": "0x293Bc420a74A9Cc13D6462930Bfd5dfa530b2438",
+    "hash": "af70e89ac55ddd205c0638bcddde20b52e639bb2255c459c634ecd41585aec5e"
+  }
+}

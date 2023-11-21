@@ -50,14 +50,14 @@ async function deployEntryPoint(config){
     config.entrypoint = {address: DeterministicDeployer.getAddress(EntryPoint__factory.bytecode)};
     let deployer = new DeterministicDeployer(ethers.provider)
     if (await deployer.isContractDeployed(config.entrypoint.address)) {
-      console.log(`EntryPoint address: ${config.entrypoint.address}`);
+      console.log(`\tEntryPoint address: ${config.entrypoint.address}`);
       return
     }
     if (config.chainId !== HARDHAT_CHAIN && config.chainId !== LOCAL_CHAIN){
         throw new Error(`EntryPoint is not deployed on chain ${config.chainId}`)
     }
     await deployer.deterministicDeploy(EntryPoint__factory.bytecode)
-    console.log(`EntryPoint address: ${config.entrypoint.address}`);
+    console.log(`\tEntryPoint address: ${config.entrypoint.address}`);
 }
 
 async function deployBundler(config){
@@ -65,10 +65,10 @@ async function deployBundler(config){
         const bundler = ethers.Wallet.createRandom();
         const address = await bundler.getAddress();
         config.bundler = {address};
-        console.log(`Bundler address: ${config.bundler.address}`);
+        console.log(`\tBundler address: ${config.bundler.address}`);
     }else{
         if (!config.bundler.url) throw new Error(`Bundler url is not defined for chain ${config.chainId}`);
-        console.log(`Bundler url: ${config.bundler.url}`);
+        console.log(`\tBundler url: ${config.bundler.url}`);
     }
 }
 
@@ -82,24 +82,24 @@ async function deployGreeter(config){
     const Greeter = await ethers.getContractFactory("Greeter");
     const { isDeployed, hash } = await checkDeployed(config.greeter, Greeter);
     if (!isDeployed){
-        console.log(`Deploying Greeter`);
+        console.log(`\tDeploying Greeter`);
         const greeter = await Greeter.deploy("Hello World!");
         await greeter.deployed();
         config.greeter = {address: greeter.address, hash};
     }
-    console.log(`Greeter address: ${config.greeter.address}`);
+    console.log(`\tGreeter address: ${config.greeter.address}`);
 }
 
 async function deployVerifier(config){
     const Verifier = await ethers.getContractFactory("Groth16Verifier");
     const { isDeployed, hash } = await checkDeployed(config.verifier, Verifier);
     if (!isDeployed){
-        console.log(`Deploying Verifier`);
+        console.log(`\tDeploying Verifier`);
         const verifier = await Verifier.deploy();
         await verifier.deployed();
         config.verifier = {address: verifier.address, hash};
     }
-    console.log(`Verifier address: ${config.verifier.address}`);
+    console.log(`\tVerifier address: ${config.verifier.address}`);
 }
 
 async function deployMerkleTree(config){
@@ -110,12 +110,12 @@ async function deployMerkleTree(config){
     })
     const { isDeployed, hash } = await checkDeployed(config.merkle, Merkle);
     if (!isDeployed){   
-        console.log(`Deploying Merkle`);
+        console.log(`\tDeploying Merkle`);
         const merkle = await Merkle.deploy();
         await merkle.deployed();
         config.merkle = {address: merkle.address, hash};
     }
-    console.log(`Merkle address: ${config.merkle.address}`);
+    console.log(`\tMerkle address: ${config.merkle.address}`);
 }
 
 async function deployZkTeamFactory(config){
@@ -126,21 +126,24 @@ async function deployZkTeamFactory(config){
     }});
     const { isDeployed, hash } = await checkDeployed(config.factory, Factory);
     if (!isDeployed){   
-        console.log(`Deploying ZkTeam Factory`);
+        console.log(`\tDeploying ZkTeam Factory`);
         const factory = await Factory.deploy(config.entrypoint.address, config.verifier.address);
         await factory.deployed();
         config.factory = {address: factory.address, hash};
     }
-    console.log(`Factory address: ${config.factory.address}`);
+    console.log(`\tFactory address: ${config.factory.address}`);
 }
 
+let cache;
+
 export async function deployAll() {
+    if (cache !== undefined) return cache;
     const chainId = (await ethers.provider.getNetwork()).chainId;
-    console.log(`Chain id: ${chainId}`);
+    console.log(`\tChain id: ${chainId}`);
     const [deployer] = await ethers.getSigners()
-    console.log('Deployer address:', deployer.address)
+    console.log(`\tDeployer address: ${deployer.address}`);
     const balance = await deployer.getBalance();
-    console.log(`Deployer balance: ${balance} (${ethers.utils.formatEther(balance)} eth)`)
+    console.log(`\tDeployer balance: ${balance} (${ethers.utils.formatEther(balance)} eth)`)
     
     let config = {chainId}
     const filename = resolve(join('config', `${chainId}.json`));
@@ -160,6 +163,8 @@ export async function deployAll() {
         const filename = resolve(join('config', `${config.chainId}.json`));
         writeFileSync(filename, JSON.stringify(config, null, 2), 'utf-8');
     }
+     
+    cache = config; 
        
     return config;
 }

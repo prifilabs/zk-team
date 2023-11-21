@@ -13,7 +13,7 @@ export class VerifyingPaymasterAPI extends PaymasterAPI {
   private owner: ethers.Wallet;
   private validUntilDelay: Number;
   
-  constructor(paymaster: ethers.Contrtact, owner: ethers.Wallet, validUntilDelay: Number) {
+  constructor(paymaster: ethers.Contract, owner: ethers.Wallet, validUntilDelay: Number) {
     super();
     this.paymaster = paymaster;
     this.owner = owner;
@@ -56,7 +56,7 @@ export class VerifyingPaymasterAPI extends PaymasterAPI {
     const sig = await this.owner.signMessage(ethers.utils.arrayify(hash));
         
     const paymasterAndData = ethers.utils.hexConcat([this.paymaster.address, ethers.utils.defaultAbiCoder.encode(['uint48', 'uint48'], [validUntil, validAfter]), sig])
-    
+        
     return paymasterAndData;
     
   }

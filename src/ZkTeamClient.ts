@@ -54,10 +54,10 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
           provider,
           signer,
           index,
-          entryPointAddress: config.entryPointAddress,
-          factoryAddress: config.factoryAddress,
+          entryPointAddress: config.entrypoint.address,
+          factoryAddress: config.factory.address,
+          bundler: config.bundler
       });
-      this.config = config;
       this.provider = provider;
       this.key = HDNode.fromExtendedKey(key);
     }
@@ -77,9 +77,7 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
         if (index == 0) return null;
         const { n, k, i } = ZkTeamClientAdmin.generateTriplet(userKey, index-1);
         const nullifierHash  = ZkTeamClientAdmin.getNullifierHash(n);
-        const { allowance } = await this.getDecryptedAllowance(nullifierHash, k, i);
-        if (allowance == null) return null;
-        return allowance;
+        return this.getDecryptedAllowance(nullifierHash, k, i);
     }
     
     public async getAllowances(page, limit){
@@ -110,7 +108,7 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
             target: await this.getAccountAddress(),
             data: "0x",
         });            
-        const uoHash = await this.config.sendUserOp(op);
+        const uoHash = await this.sendUserOp(op);
         return this.getUserOpReceipt(uoHash);
     }
     
@@ -125,7 +123,7 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
                 const nullifierHash  = ZkTeamClientAdmin.getNullifierHash(oldTriplet.n);
                 const log = this.data.nullifierHashes[nullifierHash];
                 if (!log.verified && !log.discarded){
-                    const {allowance} = decryptAllowance(log.encryptedAllowance, oldTriplet.k, oldTriplet.i);
+                    const allowance = decryptAllowance(log.encryptedAllowance, oldTriplet.k, oldTriplet.i);
                     const commitmentHash = ZkTeamClientAdmin.getCommitmentHash(currentTriplet.n, currentTriplet.s, allowance);
                     if (commitmentHash === log.commitmentHash) log.verified = true;
                 }
@@ -144,10 +142,10 @@ export class ZkTeamClientUser extends ZkTeamClient {
       super({
           provider,
           accountAddress,
-          entryPointAddress: config.entryPointAddress,
-          factoryAddress: config.factoryAddress,
+          entryPointAddress: config.entrypoint.address,
+          factoryAddress: config.factory.address,
+          bundler: config.bundler
       });
-      this.config = config;
       this.provider = provider;
       this.key = HDNode.fromExtendedKey(key);
     }
@@ -157,9 +155,7 @@ export class ZkTeamClientUser extends ZkTeamClient {
         if (index == 0) return null;
         const { n, k, i } = ZkTeamClientUser.generateTriplet(this.key, index-1);
         const nullifierHash  = ZkTeamClientUser.getNullifierHash(n);
-        const { allowance } = await this.getDecryptedAllowance(nullifierHash, k, i);
-        if (allowance == null) return null;
-        return allowance;
+        return this.getDecryptedAllowance(nullifierHash, k, i);
     }
     
     public async generateInputs(value, padding?){
@@ -192,7 +188,7 @@ export class ZkTeamClientUser extends ZkTeamClient {
             target,
             data,
         });
-        const uoHash = await this.config.sendUserOp(op);
+        const uoHash = await this.sendUserOp(op);
         return this.getUserOpReceipt(uoHash);
     }
 
