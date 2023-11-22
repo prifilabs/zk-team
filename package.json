@@ -1,6 +1,6 @@
 {
     "name": "@prifilabs/zk-team",
-    "version": "1.0.1",
+    "version": "1.0.2",
     "description": "Privacy-Preserving Account-Abstraction for Teams",
     "main": "lib/src/ZkTeamClient.js",
     "scripts": {
@@ -48,7 +48,6 @@
         "husky": "^8.0.3",
         "lint-staged": "^13.2.3",
         "prettier": "^2.8.8",
-        "snarkjs": "^0.7.0",
         "solidity-coverage": "^0.8.5",
         "ts-node": "^10.9.1",
         "typechain": "^5.2.0",
@@ -63,7 +62,8 @@
         "bigint-conversion": "^2.4.2",
         "ethers": "^5.7.2",
         "poseidon-lite": "^0.2.0",
-        "poseidon-solidity": "^0.0.5"
+        "poseidon-solidity": "^0.0.5",
+        "snarkjs": "^0.7.0",
     },
     "lint-staged": {
         "*.{js,css,md,ts,sol}": "prettier --write"
