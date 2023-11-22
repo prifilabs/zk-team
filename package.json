@@ -63,7 +63,7 @@
         "ethers": "^5.7.2",
         "poseidon-lite": "^0.2.0",
         "poseidon-solidity": "^0.0.5",
-        "snarkjs": "^0.7.0",
+        "snarkjs": "^0.7.0"
     },
     "lint-staged": {
         "*.{js,css,md,ts,sol}": "prettier --write"
