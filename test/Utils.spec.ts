@@ -33,7 +33,7 @@ describe("Utils", function () {
     encryptValue(MAXIMUM_ALLOWANCE);
   });
 
-  it("Should encrypt and decrypt MaxUint256", async function () {
+  it("Should not encrypt MaxUint256", async function () {
     expect(function () {
       encryptValue(ethers.constants.MaxUint256.toBigInt());
     }).to.throw(Error);

@@ -38,7 +38,7 @@ describe("Anomaly Detection", function () {
   });
 
   it("Should allow the admin to set the allowance for user #0, #1, #2", async function () {
-    const allowance = ethers.utils.parseEther("0.005").toBigInt();
+    const allowance = ethers.utils.parseEther("0.01").toBigInt();
     for (let userIndex of [0, 1, 2]) {
       const op = await adminInstance.setAllowance(userIndex, allowance);
       await processOp(adminInstance, op, config);
@@ -49,7 +49,7 @@ describe("Anomaly Detection", function () {
   });
 
   it("Should allow user 0 to use its allowance once", async function () {
-    const key = await adminInstance.getUserKey(0);
+    const { key } = await adminInstance.getUser(0);
     const accountAddress = await adminInstance.getAccountAddress();
     const userInstance = new ZkTeamClientUser({
       provider: ethers.provider,
@@ -72,12 +72,12 @@ describe("Anomaly Detection", function () {
 
     expect(await greeter.greet()).to.equal(greeting);
     expect(await userInstance.getAllowance()).to.be.equal(
-      ethers.utils.parseEther("0.004").toBigInt()
+      ethers.utils.parseEther("0.009").toBigInt()
     );
   });
 
   it("Should allow user 1 to tampered with the balance", async function () {
-    const key = await adminInstance.getUserKey(1);
+    const { key } = await adminInstance.getUser(1);
     const accountAddress = await adminInstance.getAccountAddress();
     const userInstance = new ZkTeamClientUser({
       provider: ethers.provider,
@@ -101,7 +101,7 @@ describe("Anomaly Detection", function () {
       index
     );
     const tamperedAllowance = encryptAllowance(
-      ethers.utils.parseEther("0.005").toBigInt(),
+      ethers.utils.parseEther("0.01").toBigInt(),
       k,
       i
     );
@@ -116,14 +116,14 @@ describe("Anomaly Detection", function () {
 
     expect(await greeter.greet()).to.equal(greeting);
     expect(await adminInstance.getAllowance(1)).to.be.equal(
-      ethers.utils.parseEther("0.005").toBigInt()
+      ethers.utils.parseEther("0.01").toBigInt()
     );
   });
 
   let rogueKey;
 
   it("Should allow user 2 to steal the allowance", async function () {
-    const key = await adminInstance.getUserKey(2);
+    const { key } = await adminInstance.getUser(2);
     const accountAddress = await adminInstance.getAccountAddress();
     const userInstance = new ZkTeamClientUser({
       provider: ethers.provider,
@@ -180,7 +180,7 @@ describe("Anomaly Detection", function () {
 
     expect(await greeter.greet()).to.equal(greeting);
     expect(await adminInstance.getAllowance(2)).to.be.equal(
-      ethers.utils.parseEther("0.004").toBigInt()
+      ethers.utils.parseEther("0.009").toBigInt()
     );
   });
 
@@ -226,7 +226,7 @@ describe("Anomaly Detection", function () {
 
     expect(await greeter.greet()).to.equal(greeting);
     expect(await adminInstance.getAllowance(2)).to.be.equal(
-      ethers.utils.parseEther("0.004").toBigInt()
+      ethers.utils.parseEther("0.009").toBigInt()
     );
   });
 
@@ -269,7 +269,7 @@ describe("Anomaly Detection", function () {
 
     expect(await greeter.greet()).to.equal(greeting);
     expect(await userInstance.getAllowance()).to.be.equal(
-      ethers.utils.parseEther("0.002").toBigInt()
+      ethers.utils.parseEther("0.007").toBigInt()
     );
   });
 });

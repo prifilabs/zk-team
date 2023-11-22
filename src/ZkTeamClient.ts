@@ -20,9 +20,9 @@ export async function getAccount(
   );
   const accountAddress = await factory.getAddress(ownerAddress, accountIndex);
   const accountCode = await provider.getCode(accountAddress);
-  const exists = accountCode.length > 2;
-  const balance = await provider.getBalance(accountAddress);
-  return { balance, exists };
+  let exists = accountCode.length > 2;
+  let balance = await provider.getBalance(accountAddress);
+  return { index:accountIndex, address: accountAddress, balance, exists };
 }
 
 export async function getAccounts(
@@ -80,17 +80,13 @@ class ZkTeamClient extends ZkTeamCore {
 }
 
 export class ZkTeamClientAdmin extends ZkTeamClient {
-  private getRawUserKey(userIndex: number) {
+  
+  private getUserKey(userIndex: number) {
     return this.key.derivePath(`m/${this.index}/${userIndex}'`);
   }
 
-  public async getUserKey(userIndex: number) {
-    const userKey = this.getRawUserKey(userIndex);
-    return userKey.extendedKey;
-  }
-
   public async getAllowance(userIndex: number) {
-    const userKey = this.getRawUserKey(userIndex);
+    const userKey = this.getUserKey(userIndex);
     const index = await this.getLastIndex(userKey);
     if (index == 0) return null;
     const { n, k, i } = ZkTeamClientAdmin.generateTriplet(userKey, index - 1);
@@ -98,15 +94,26 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
     return this.getDecryptedAllowance(nullifierHash, k, i);
   }
 
-  public async getAllowances(page: number, limit: number) {
-    const tasks = Array.from({ length: limit }, (v, k) =>
-      this.getAllowance(page * limit + k)
+  public async getUser(userIndex: number) {
+    const key = this.getUserKey(userIndex).extendedKey
+    let allowance = await this.getAllowance(userIndex);
+    let exists = true;
+    if (allowance == null){
+        allowance = BigInt(0);
+        exists = false;
+    } 
+    return { index: userIndex, key, allowance, exists };
+  }
+
+  public async getUsers(page: number, limit: number) {
+    const users = Array.from({ length: limit }, (v, k) =>
+         this.getUser(page * limit + k)
     );
-    return Promise.all(tasks);
+    return Promise.all(users);
   }
 
   public async generateInputs(userIndex: number, newAllowance: bigint) {
-    const userKey = this.getRawUserKey(userIndex);
+    const userKey = this.getUserKey(userIndex);
     const index = (await this.checkAccountPhantom())
       ? 0
       : await this.getLastIndex(userKey);
@@ -133,7 +140,7 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
 
   public async checkIntegrity(userIndexLimit: number) {
     for (let userIndex = 0; userIndex <= userIndexLimit; userIndex++) {
-      const userKey = this.getRawUserKey(userIndex);
+      const userKey = this.getUserKey(userIndex);
       const index = await this.getLastIndex(userKey);
       if (index == 0) continue;
       for (let i = 1; i <= index; i++) {
@@ -164,6 +171,11 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
 }
 
 export class ZkTeamClientUser extends ZkTeamClient {
+  
+  public getKey(){
+      return this.key.extendedKey;
+  }
+  
   public async getAllowance() {
     const index = await this.getLastIndex(this.key);
     if (index == 0) return null;

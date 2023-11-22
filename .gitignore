@@ -8,5 +8,6 @@ typechain
 cache
 artifacts
 
+wallet.txt
 mnemonic.txt
 config/1337.json

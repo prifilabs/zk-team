@@ -44,41 +44,19 @@ describe("ZkTeam Client", function () {
   });
 
   it("Should allow the admin to set the allowance for user #0", async function () {
-    const allowance = ethers.utils.parseEther("0.005").toBigInt();
+    const allowance = ethers.utils.parseEther("0.01").toBigInt();
     const op = await adminInstance.setAllowance(0, allowance);
     await processOp(adminInstance, op, config);
     expect(await adminInstance.checkAccountPhantom()).to.be.false;
   });
 
-  it("Should allow the admin to get the allowance for user #0", async function () {
+  it("Should allow the admin to get info for user #0", async function () {
     const allowance = await adminInstance.getAllowance(0);
-    expect(allowance).to.be.equal(ethers.utils.parseEther("0.005"));
-  });
-
-  it("Should allow the admin to get the balance for multiple accounts", async function () {
-    const adminAddress = await admin.getAddress();
-    const balances = await getAccounts(
-      ethers.provider,
-      config.factory.address,
-      adminAddress,
-      0,
-      5
-    );
-    expect(balances[0]).to.have.property("exists", true);
-    expect(balances[0]).to.have.property("balance").to.be.above(0);
-    expect(balances.slice(1)).to.deep.equal(
-      Array(4).fill({ balance: ethers.utils.parseEther("0"), exists: false })
-    );
-  });
-
-  it("Should allow the admin to get the allowance for multiple users", async function () {
-    const allowances = await adminInstance.getAllowances(0, 5);
-    expect(allowances[0]).to.be.equal(ethers.utils.parseEther("0.005"));
-    expect(allowances.slice(1)).to.deep.equal(Array(4).fill(null));
+    expect(allowance).to.be.equal(ethers.utils.parseEther("0.01"));
   });
 
   it("Should allow user 0 to get its allowance", async function () {
-    const key = await adminInstance.getUserKey(0);
+    const { key } = await adminInstance.getUser(0);
     const accountAddress = await adminInstance.getAccountAddress();
     userInstance = new ZkTeamClientUser({
       provider: ethers.provider,
@@ -88,7 +66,7 @@ describe("ZkTeam Client", function () {
       factoryAddress: config.factory.address,
     });
     const allowance = await userInstance.getAllowance();
-    expect(allowance).to.be.equal(ethers.utils.parseEther("0.005"));
+    expect(allowance).to.be.equal(ethers.utils.parseEther("0.01"));
   });
 
   it("Should allow user 0 to use its allowance once", async function () {
@@ -102,7 +80,7 @@ describe("ZkTeam Client", function () {
     await processOp(userInstance, op, config);
     expect(await greeter.greet()).to.equal(greeting);
     const allowance = await userInstance.getAllowance();
-    expect(allowance).to.be.equal(ethers.utils.parseEther("0.004").toBigInt());
+    expect(allowance).to.be.equal(ethers.utils.parseEther("0.009").toBigInt());
   });
 
   it("Should allow user 0 to use its allowance again", async function () {
@@ -116,18 +94,18 @@ describe("ZkTeam Client", function () {
     await processOp(userInstance, op, config);
     expect(await greeter.greet()).to.equal(greeting);
     const allowance = await userInstance.getAllowance();
-    expect(allowance).to.be.equal(ethers.utils.parseEther("0.002").toBigInt());
+    expect(allowance).to.be.equal(ethers.utils.parseEther("0.007").toBigInt());
   });
 
   it("Should allow the admin to update the allowance for user #0", async function () {
-    const allowance = ethers.utils.parseEther("0.005").toBigInt();
+    const allowance = ethers.utils.parseEther("0.02").toBigInt();
     const op = await adminInstance.setAllowance(0, allowance);
     await processOp(adminInstance, op, config);
     expect(await adminInstance.getAllowance(0)).to.be.equal(
-      ethers.utils.parseEther("0.005").toBigInt()
+      ethers.utils.parseEther("0.02").toBigInt()
     );
     expect(await userInstance.getAllowance()).to.be.equal(
-      ethers.utils.parseEther("0.005").toBigInt()
+      ethers.utils.parseEther("0.02").toBigInt()
     );
   });
 
@@ -142,6 +120,33 @@ describe("ZkTeam Client", function () {
     await processOp(userInstance, op, config);
     expect(await greeter.greet()).to.equal(greeting);
     const allowance = await userInstance.getAllowance();
-    expect(allowance).to.be.equal(ethers.utils.parseEther("0.002").toBigInt());
+    expect(allowance).to.be.equal(ethers.utils.parseEther("0.017").toBigInt());
+  });
+  
+  it("Should allow the admin to get info for multiple accounts", async function () {
+    const adminAddress = await admin.getAddress();
+    const accounts = await getAccounts(
+      ethers.provider,
+      config.factory.address,
+      adminAddress,
+      0,
+      5
+    );
+    expect(accounts[0]).to.have.property("exists", true);
+    expect(accounts[0]).to.have.property("balance").to.be.above(0);
+    for(let account of accounts.slice(1)){
+        expect(account.balance).to.be.equal(BigInt(0));
+        expect(account.exists).to.be.equal(false);
+    }
+  });
+
+  it("Should allow the admin to get info for multiple users", async function () {
+    const users = await adminInstance.getUsers(0, 5);
+    expect(users[0].allowance).to.be.equal(ethers.utils.parseEther("0.017"));
+    expect(users[0].exists).to.be.equal(true);
+    for(let user of users.slice(1)){
+        expect(user.allowance).to.be.equal(BigInt(0));
+        expect(user.exists).to.be.equal(false);
+    }
   });
 });

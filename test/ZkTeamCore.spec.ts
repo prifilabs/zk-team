@@ -2,6 +2,7 @@ const hre = require("hardhat");
 const { ethers } = hre;
 
 import { readFileSync, existsSync, writeFileSync } from "fs";
+import { join } from "path";
 import { expect } from "chai";
 
 import * as EntryPoint from "@account-abstraction/contracts/artifacts/EntryPoint.json";
@@ -31,7 +32,7 @@ async function topUp(from, address, minimumAmount, maximumAmount, provider) {
 export async function setAdmin(deployer, config) {
   let admin;
 
-  const filename = "mnemonic.txt";
+  const filename = join("test", "wallet.txt");
   if (existsSync(filename)) {
     admin = ethers.Wallet.fromMnemonic(readFileSync(filename, "utf-8")).connect(
       ethers.provider
@@ -45,8 +46,8 @@ export async function setAdmin(deployer, config) {
   await topUp(
     deployer,
     adminAddress,
-    ethers.utils.parseEther("0.3"),
-    ethers.utils.parseEther("0.5"),
+    ethers.utils.parseEther("0.1"),
+    ethers.utils.parseEther("0.2"),
     ethers.provider
   );
   const adminBalance = await ethers.provider.getBalance(adminAddress);
@@ -73,8 +74,8 @@ export async function setAccount(deployer, signer, index, config) {
   await topUp(
     deployer,
     accountAddress,
-    ethers.utils.parseEther("0.3"),
-    ethers.utils.parseEther("0.5"),
+    ethers.utils.parseEther("0.1"),
+    ethers.utils.parseEther("0.2"),
     ethers.provider
   );
   const accountBalance = await ethers.provider.getBalance(accountAddress);
@@ -144,7 +145,7 @@ describe("ZkTeam Core", function () {
       ethers.utils.randomBytes(32)
     ).toBigInt();
 
-    const newAllowance = ethers.utils.parseEther("0.005").toBigInt();
+    const newAllowance = ethers.utils.parseEther("0.01").toBigInt();
     const newNullifier = ethers.BigNumber.from(
       ethers.utils.randomBytes(32)
     ).toBigInt();

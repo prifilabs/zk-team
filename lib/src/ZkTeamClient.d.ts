@@ -3,10 +3,14 @@ import { Provider } from "@ethersproject/providers";
 import { HDNode } from "ethers/lib/utils";
 import { ZkTeamCore, ZkTeamCoreParams } from "./ZkTeamCore";
 export declare function getAccount(provider: Provider, factoryAddress: string, ownerAddress: string, accountIndex: number): Promise<{
+    index: number;
+    address: any;
     balance: BigNumber;
     exists: boolean;
 }>;
 export declare function getAccounts(provider: Provider, factoryAddress: string, ownerAddress: string, page: number, limit: number): Promise<{
+    index: number;
+    address: any;
     balance: BigNumber;
     exists: boolean;
 }[]>;
@@ -25,10 +29,20 @@ declare class ZkTeamClient extends ZkTeamCore {
     getLastIndex(key: HDNode): Promise<number>;
 }
 export declare class ZkTeamClientAdmin extends ZkTeamClient {
-    private getRawUserKey;
-    getUserKey(userIndex: number): Promise<string>;
+    private getUserKey;
     getAllowance(userIndex: number): Promise<bigint | null>;
-    getAllowances(page: number, limit: number): Promise<(bigint | null)[]>;
+    getUser(userIndex: number): Promise<{
+        index: number;
+        key: string;
+        allowance: bigint;
+        exists: boolean;
+    }>;
+    getUsers(page: number, limit: number): Promise<{
+        index: number;
+        key: string;
+        allowance: bigint;
+        exists: boolean;
+    }[]>;
     generateInputs(userIndex: number, newAllowance: bigint): Promise<{
         newAllowance: bigint;
         oldNullifierHash: bigint;
@@ -40,6 +54,7 @@ export declare class ZkTeamClientAdmin extends ZkTeamClient {
     checkIntegrity(userIndexLimit: number): Promise<bigint[]>;
 }
 export declare class ZkTeamClientUser extends ZkTeamClient {
+    getKey(): string;
     getAllowance(): Promise<bigint | null>;
     generateInputs(value: bigint): Promise<{
         value: bigint;
