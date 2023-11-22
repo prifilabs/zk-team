@@ -1,19 +1,14 @@
-import { BigNumber } from "ethers";
 import { Provider } from "@ethersproject/providers";
 import { HDNode } from "ethers/lib/utils";
 import { ZkTeamCore, ZkTeamCoreParams } from "./ZkTeamCore";
-export declare function getAccount(provider: Provider, factoryAddress: string, ownerAddress: string, accountIndex: number): Promise<{
+export interface AccountInfo {
     index: number;
-    address: any;
-    balance: BigNumber;
+    balance: bigint;
     exists: boolean;
-}>;
-export declare function getAccounts(provider: Provider, factoryAddress: string, ownerAddress: string, page: number, limit: number): Promise<{
-    index: number;
-    address: any;
-    balance: BigNumber;
-    exists: boolean;
-}[]>;
+    address: string;
+}
+export declare function getAccount(provider: Provider, factoryAddress: string, ownerAddress: string, accountIndex: number): Promise<AccountInfo>;
+export declare function getAccounts(provider: Provider, factoryAddress: string, ownerAddress: string, page: number, limit: number): Promise<Array<AccountInfo>>;
 export interface ZkTeamClientParams extends ZkTeamCoreParams {
     key: string;
 }
@@ -28,21 +23,17 @@ declare class ZkTeamClient extends ZkTeamCore {
     };
     getLastIndex(key: HDNode): Promise<number>;
 }
+export interface UserInfo {
+    index: number;
+    key: string;
+    allowance: bigint;
+    exists: boolean;
+}
 export declare class ZkTeamClientAdmin extends ZkTeamClient {
     private getUserKey;
     getAllowance(userIndex: number): Promise<bigint | null>;
-    getUser(userIndex: number): Promise<{
-        index: number;
-        key: string;
-        allowance: bigint;
-        exists: boolean;
-    }>;
-    getUsers(page: number, limit: number): Promise<{
-        index: number;
-        key: string;
-        allowance: bigint;
-        exists: boolean;
-    }[]>;
+    getUser(userIndex: number): Promise<UserInfo>;
+    getUsers(page: number, limit: number): Promise<Array<UserInfo>>;
     generateInputs(userIndex: number, newAllowance: bigint): Promise<{
         newAllowance: bigint;
         oldNullifierHash: bigint;

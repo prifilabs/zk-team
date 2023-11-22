@@ -133,7 +133,8 @@ describe("ZkTeam Client", function () {
       5
     );
     expect(accounts[0]).to.have.property("exists", true);
-    expect(accounts[0]).to.have.property("balance").to.be.above(0);
+    expect(accounts[0]).to.have.property("balance");
+    expect(accounts[0].balance > BigInt(0)).to.be.true;
     for(let account of accounts.slice(1)){
         expect(account.balance).to.be.equal(BigInt(0));
         expect(account.exists).to.be.equal(false);

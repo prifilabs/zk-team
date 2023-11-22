@@ -7,12 +7,19 @@ import * as ZkTeamAccountFactory from "../artifacts/contracts/ZkTeamAccountFacto
 import { ZkTeamCore, ZkTeamCoreParams } from "./ZkTeamCore";
 import { decryptAllowance } from "./Utils/encryption";
 
+export interface AccountInfo{
+    index: number
+    balance: bigint
+    exists: boolean
+    address: string
+}
+
 export async function getAccount(
   provider: Provider,
   factoryAddress: string,
   ownerAddress: string,
   accountIndex: number
-) {
+): Promise<AccountInfo> {
   const factory = new Contract(
     factoryAddress,
     ZkTeamAccountFactory.abi,
@@ -22,7 +29,7 @@ export async function getAccount(
   const accountCode = await provider.getCode(accountAddress);
   let exists = accountCode.length > 2;
   let balance = await provider.getBalance(accountAddress);
-  return { index:accountIndex, address: accountAddress, balance, exists };
+  return { index:accountIndex, address: accountAddress, balance: balance.toBigInt(), exists };
 }
 
 export async function getAccounts(
@@ -31,7 +38,7 @@ export async function getAccounts(
   ownerAddress: string,
   page: number,
   limit: number
-) {
+) : Promise<Array<AccountInfo>> {
   const tasks = Array.from({ length: limit }, (v, k) =>
     getAccount(provider, factoryAddress, ownerAddress, page * limit + k)
   );
@@ -62,7 +69,7 @@ class ZkTeamClient extends ZkTeamCore {
     return { s, n, k, i };
   }
 
-  async getLastIndex(key: HDNode) {
+  async getLastIndex(key: HDNode): Promise<number> {
     let index = 0;
     while (true) {
       const nullifier = BigNumber.from(
@@ -79,13 +86,20 @@ class ZkTeamClient extends ZkTeamCore {
   }
 }
 
+export interface UserInfo{
+    index: number, 
+    key: string, 
+    allowance: bigint, 
+    exists: boolean
+}
+
 export class ZkTeamClientAdmin extends ZkTeamClient {
   
-  private getUserKey(userIndex: number) {
+  private getUserKey(userIndex: number): HDNode {
     return this.key.derivePath(`m/${this.index}/${userIndex}'`);
   }
 
-  public async getAllowance(userIndex: number) {
+  public async getAllowance(userIndex: number): Promise<bigint | null> {
     const userKey = this.getUserKey(userIndex);
     const index = await this.getLastIndex(userKey);
     if (index == 0) return null;
@@ -94,7 +108,7 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
     return this.getDecryptedAllowance(nullifierHash, k, i);
   }
 
-  public async getUser(userIndex: number) {
+  public async getUser(userIndex: number): Promise<UserInfo> {
     const key = this.getUserKey(userIndex).extendedKey
     let allowance = await this.getAllowance(userIndex);
     let exists = true;
@@ -105,7 +119,7 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
     return { index: userIndex, key, allowance, exists };
   }
 
-  public async getUsers(page: number, limit: number) {
+  public async getUsers(page: number, limit: number): Promise<Array<UserInfo>>{
     const users = Array.from({ length: limit }, (v, k) =>
          this.getUser(page * limit + k)
     );
@@ -172,11 +186,11 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
 
 export class ZkTeamClientUser extends ZkTeamClient {
   
-  public getKey(){
+  public getKey():string {
       return this.key.extendedKey;
   }
   
-  public async getAllowance() {
+  public async getAllowance(): Promise<bigint | null> {
     const index = await this.getLastIndex(this.key);
     if (index == 0) return null;
     const { n, k, i } = ZkTeamClientUser.generateTriplet(this.key, index - 1);
