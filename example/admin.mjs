@@ -2,7 +2,7 @@ import { readFileSync, existsSync, writeFileSync } from "fs";
 import { join } from "path";
 import ethers from "ethers";
 
-import { ZkTeamClientAdmin, ZkTeamClientUser, getAccounts, getAccount }from "@prifilabs/zk-team";
+import { ZkTeamClientAdmin, getAccounts, getAccount }from "@prifilabs/zk-team";
 
 import { config, provider , client } from "./setup.mjs";
 
@@ -72,3 +72,6 @@ console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} eth)`);
 
 const user0 = await adminInstance.getUser(0);
 console.log(`User #${user0.index}: exists:${user0.exists}, allowance:${user0.allowance}, key:${user0.key}`);
+
+// share the accoutn address and the user's key with the user
+writeFileSync("user.txt", JSON.stringify({ address: account0.address, key: user0.key }, null, 2), "utf-8");

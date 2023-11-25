@@ -1,4 +1,4 @@
-import { readFileSync } from "fs";
+import { join }  from 'path';
 
 import {
   Signer,
@@ -18,9 +18,6 @@ import {
 
 import { BaseAccountAPI, DefaultGasOverheads } from "@account-abstraction/sdk";
 
-import * as ZkTeamAccountFactory from "../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json";
-import * as ZkTeamAccount from "../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json";
-
 import { groth16 } from "snarkjs";
 
 import { MerkleTree } from "./Utils/MerkleTree";
@@ -28,6 +25,23 @@ import { encryptAllowance, decryptAllowance } from "./Utils/encryption";
 import { poseidon1, poseidon3 } from "poseidon-lite";
 
 import AsyncLock from "async-lock";
+
+import * as ZkTeamAccountFactory from "../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json";
+import * as ZkTeamAccount from "../artifacts/contracts/ZkTeamAccount.sol/ZkTeamAccount.json";
+
+import vKey from "../ptau-data/verification_key.json";
+
+import { detect } from 'detect-browser';
+const platform = detect();
+const browser = (platform && platform.type === 'browser');
+
+let wasmFile = join(__dirname, "..", "ptau-data", "zkteam_js", "ZkTeam.wasm");
+let zkeyFile = join(__dirname, "..", "ptau-data", "ZkTeam_0001.zkey");
+
+if (browser){
+    wasmFile = "https://github.com/prifilabs/zk-team/raw/master/ptau-data/zkteam_js/zkteam.wasm";
+    zkeyFile = "https://github.com/prifilabs/zk-team/raw/master/ptau-data/ZkTeam_0001.zkey"
+}
 
 export interface CoreInput {
   value: bigint;
@@ -455,16 +469,9 @@ export class ZkTeamCore extends BaseAccountAPI {
       newCommitmentHash: info.newCommitmentHash,
       newRoot: info.newRoot,
     };
+    
+    const { proof, publicSignals } = await groth16.fullProve(inputs, wasmFile, zkeyFile);
 
-    const { proof, publicSignals } = await groth16.fullProve(
-      inputs,
-      "ptau-data/ZkTeam_js/ZkTeam.wasm",
-      "ptau-data/ZkTeam_0001.zkey"
-    );
-
-    const vKey = JSON.parse(
-      readFileSync("ptau-data/verification_key.json").toString()
-    );
     let res = await groth16.verify(vKey, publicSignals, proof);
 
     if (!res) throw new Error("Invalid proof");

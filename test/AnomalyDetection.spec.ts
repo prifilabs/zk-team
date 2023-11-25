@@ -67,7 +67,7 @@ describe("Anomaly Detection", function () {
       greeting,
     ]);
 
-    const op = await userInstance.sendTransaction(target, value, data);
+    const op = await userInstance.setTransaction(target, value, data);
     await processOp(userInstance, op, config);
 
     expect(await greeter.greet()).to.equal(greeting);
@@ -264,7 +264,7 @@ describe("Anomaly Detection", function () {
       greeting,
     ]);
 
-    const op = await userInstance.sendTransaction(target, value, data);
+    const op = await userInstance.setTransaction(target, value, data);
     await processOp(userInstance, op, config);
 
     expect(await greeter.greet()).to.equal(greeting);

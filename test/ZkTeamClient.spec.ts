@@ -76,7 +76,7 @@ describe("ZkTeam Client", function () {
     const data = greeter.interface.encodeFunctionData("setGreeting", [
       greeting,
     ]);
-    const op = await userInstance.sendTransaction(target, value, data);
+    const op = await userInstance.setTransaction(target, value, data);
     await processOp(userInstance, op, config);
     expect(await greeter.greet()).to.equal(greeting);
     const allowance = await userInstance.getAllowance();
@@ -90,7 +90,7 @@ describe("ZkTeam Client", function () {
     const data = greeter.interface.encodeFunctionData("setGreeting", [
       greeting,
     ]);
-    const op = await userInstance.sendTransaction(target, value, data);
+    const op = await userInstance.setTransaction(target, value, data);
     await processOp(userInstance, op, config);
     expect(await greeter.greet()).to.equal(greeting);
     const allowance = await userInstance.getAllowance();
@@ -116,7 +116,7 @@ describe("ZkTeam Client", function () {
     const data = greeter.interface.encodeFunctionData("setGreeting", [
       greeting,
     ]);
-    const op = await userInstance.sendTransaction(target, value, data);
+    const op = await userInstance.setTransaction(target, value, data);
     await processOp(userInstance, op, config);
     expect(await greeter.greet()).to.equal(greeting);
     const allowance = await userInstance.getAllowance();

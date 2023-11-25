@@ -2,10 +2,10 @@ import { Contract, BigNumber, constants } from "ethers";
 import { Provider } from "@ethersproject/providers";
 import { HDNode, arrayify } from "ethers/lib/utils";
 
-import * as ZkTeamAccountFactory from "../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json";
-
 import { ZkTeamCore, ZkTeamCoreParams } from "./ZkTeamCore";
 import { decryptAllowance } from "./Utils/encryption";
+
+import * as ZkTeamAccountFactory from "../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json";
 
 export interface AccountInfo{
     index: number
@@ -221,9 +221,9 @@ export class ZkTeamClientUser extends ZkTeamClient {
     });
   }
 
-  public async sendTransaction(target: string, value: bigint, data: string) {
+  public async setTransaction(target: string, value: bigint, data: string) {
     const inputs = await this.generateInputs(value);
-    return await this.createProvedUserOp({
+    return this.createProvedUserOp({
       ...inputs,
       target,
       data,

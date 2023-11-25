@@ -2,22 +2,23 @@
     "name": "@prifilabs/zk-team",
     "version": "1.0.2",
     "description": "Privacy-Preserving Account-Abstraction for Teams",
-    "main": "lib/src/ZkTeamClient.js",
+    "main": "dist/src/ZkTeamClient.js",
     "scripts": {
-        "build": "npx tsc",
+        "build": "npx tsc && npm run copy-files",
         "test": "npx hardhat test",
-        "coverage": "c8 npx hardhat coverage"
+        "coverage": "c8 npx hardhat coverage",
+        "copy-files": "mkdir -p ./dist/ptau-data/zkteam_js && cp ptau-data/ZkTeam_js/ZkTeam.wasm ./dist/ptau-data/ZkTeam_js/ && cp ptau-data/ZkTeam_0001.zkey ./dist/ptau-data/"
     },
     "repository": {
         "type": "git",
-        "url": "git+https://github.com/prifilabs/zk-team-js.git"
+        "url": "git+https://github.com/prifilabs/zk-team.git"
     },
     "author": "Thierry Sans",
     "license": "MIT",
     "bugs": {
-        "url": "https://github.com/prifilabs/zk-team-js/issues"
+        "url": "https://github.com/prifilabs/zk-team/issues"
     },
-    "homepage": "https://github.com/prifilabs/zk-team-js#readme",
+    "homepage": "https://github.com/prifilabs/zk-team#readme",
     "devDependencies": {
         "@nomiclabs/hardhat-ethers": "^2.2.3",
         "@nomiclabs/hardhat-etherscan": "^3.1.7",
@@ -59,6 +60,7 @@
         "@zk-kit/incremental-merkle-tree": "^1.1.0",
         "async-lock": "^1.4.0",
         "bigint-conversion": "^2.4.2",
+        "detect-browser": "^5.3.0",
         "ethers": "^5.7.2",
         "poseidon-lite": "^0.2.0",
         "poseidon-solidity": "^0.0.5",
