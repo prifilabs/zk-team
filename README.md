@@ -120,7 +120,7 @@ const op = await adminInstance.setAllowance(0, allowance);
 
 Finally, the user operation should be sent to bundler. To execute the userOperation, the account must have been provisioned with eth to pay for gas.
 
-``
+```
 const uoHash = await client.sendUserOpToBundler(op);
 const txHash = await adminInstance.getUserOpReceipt(uoHash);
 const tx = await provider.getTransaction(txHash);
@@ -143,7 +143,7 @@ const userInstance = new ZkTeamClientUser({
 });
 ```
 
-Users can check the allowance that has been allocated:
+Users can check the allowance that has been allocated to them by the admin:
 
 ```
 const allowance = await userInstance.getAllowance();
