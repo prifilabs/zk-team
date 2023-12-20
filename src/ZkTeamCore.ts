@@ -39,8 +39,8 @@ let wasmFile = join(__dirname, "..", "ptau-data", "zkteam_js", "ZkTeam.wasm");
 let zkeyFile = join(__dirname, "..", "ptau-data", "ZkTeam_0001.zkey");
 
 if (browser){
-    wasmFile = "https://github.com/prifilabs/zk-team/raw/master/ptau-data/zkteam_js/zkteam.wasm";
-    zkeyFile = "https://github.com/prifilabs/zk-team/raw/master/ptau-data/ZkTeam_0001.zkey"
+    wasmFile = "https://raw.githubusercontent.com/prifilabs/zk-team/master/ptau-data/zkteam_js/zkteam.wasm";
+    zkeyFile = "https://raw.githubusercontent.com/prifilabs/zk-team/master/ptau-data/ZkTeam_0001.zkey"
 }
 
 export interface CoreInput {

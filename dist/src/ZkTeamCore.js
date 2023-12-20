@@ -54,8 +54,8 @@ const browser = (platform && platform.type === 'browser');
 let wasmFile = (0, path_1.join)(__dirname, "..", "ptau-data", "zkteam_js", "ZkTeam.wasm");
 let zkeyFile = (0, path_1.join)(__dirname, "..", "ptau-data", "ZkTeam_0001.zkey");
 if (browser) {
-    wasmFile = "https://github.com/prifilabs/zk-team/raw/master/ptau-data/zkteam_js/zkteam.wasm";
-    zkeyFile = "https://github.com/prifilabs/zk-team/raw/master/ptau-data/ZkTeam_0001.zkey";
+    wasmFile = "https://raw.githubusercontent.com/prifilabs/zk-team/master/ptau-data/zkteam_js/zkteam.wasm";
+    zkeyFile = "https://raw.githubusercontent.com/prifilabs/zk-team/master/ptau-data/ZkTeam_0001.zkey";
 }
 class ZkTeamCore extends sdk_1.BaseAccountAPI {
     constructor(params) {

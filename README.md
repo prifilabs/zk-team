@@ -23,7 +23,7 @@ ZK-Team is a proof-of-concept of privacy-preserving account abstractions that al
 ## Installation
 
 ```sh
-$ npm install @prifilabs/ZK-Team
+npm install @prifilabs/zk-team
 ```
 
 ## Getting Started
