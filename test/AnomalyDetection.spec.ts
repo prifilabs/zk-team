@@ -24,13 +24,13 @@ describe("Anomaly Detection", function () {
     const Greeter = await ethers.getContractFactory("Greeter");
     greeter = Greeter.attach(config.greeter.address);
     const admin = await setAdmin(deployer, config);
-    await setAccount(deployer, admin, 0, config);
+    await setAccount(deployer, admin, 2, config);
     const mnemonic = ethers.Wallet.createRandom().mnemonic.phrase;
     const key = ethers.utils.HDNode.fromMnemonic(mnemonic).extendedKey;
     adminInstance = new ZkTeamClientAdmin({
       provider: ethers.provider,
       signer: admin,
-      index: 0,
+      index: 2,
       key,
       entryPointAddress: config.entrypoint.address,
       factoryAddress: config.factory.address,
@@ -231,14 +231,14 @@ describe("Anomaly Detection", function () {
   });
 
   it("Should allow the admin to detect anomalies", async function () {
-    const detectedAnomalies = await adminInstance.checkIntegrity(2);
+    const detectedAnomalies = await adminInstance.checkIntegrity();
     expect(
       detectedAnomalies.slice(detectedAnomalies.length - anomalies.length)
     ).to.have.all.members(anomalies);
   });
 
   it("Should allow the admin to correct anomalies", async function () {
-    const detectedAnomalies = await adminInstance.checkIntegrity(2);
+    const detectedAnomalies = await adminInstance.checkIntegrity();
     const txHashes = await adminInstance.discardCommitmentHashes(
       detectedAnomalies
     );
@@ -250,7 +250,7 @@ describe("Anomaly Detection", function () {
   });
 
   it("Should no longer detect any anomaly", async function () {
-    const detectedAnomalies = await adminInstance.checkIntegrity(2);
+    const detectedAnomalies = await adminInstance.checkIntegrity();
     expect(detectedAnomalies).to.have.length(0);
   });
 

@@ -71,8 +71,8 @@ export interface Log {
     encryptedAllowance: string;
     commitmentHash: bigint;
     nullifierHash: bigint;
+    transactionHash: string;
     discarded?: boolean;
-    verified?: boolean;
 }
 export declare class ZkTeamCore extends BaseAccountAPI {
     signer: Signer | undefined;

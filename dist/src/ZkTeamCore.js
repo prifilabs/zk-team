@@ -104,6 +104,7 @@ class ZkTeamCore extends sdk_1.BaseAccountAPI {
                                 encryptedAllowance,
                                 commitmentHash,
                                 nullifierHash,
+                                transactionHash: event.transactionHash
                             };
                             data.logs.push(log);
                             data.commitmentHashes[commitmentHash] = log;
@@ -319,7 +320,7 @@ class ZkTeamCore extends sdk_1.BaseAccountAPI {
         return __awaiter(this, void 0, void 0, function* () {
             let userOp = yield this.createUnsignedUserOp(Object.assign({}, info));
             const callData = yield userOp.callData;
-            // interstingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
+            // interestingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
             const callDataHash = (0, poseidon_lite_1.poseidon1)([
                 ethers_1.BigNumber.from((0, utils_1.keccak256)(callData)).toBigInt(),
             ]);

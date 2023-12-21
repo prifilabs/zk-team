@@ -2,7 +2,7 @@ import { Contract, BigNumber, constants } from "ethers";
 import { Provider } from "@ethersproject/providers";
 import { HDNode, arrayify } from "ethers/lib/utils";
 
-import { ZkTeamCore, ZkTeamCoreParams } from "./ZkTeamCore";
+import { ZkTeamCore, ZkTeamCoreParams, Log } from "./ZkTeamCore";
 import { decryptAllowance } from "./Utils/encryption";
 
 import * as ZkTeamAccountFactory from "../artifacts/contracts/ZkTeamAccountFactory.sol/ZkTeamAccountFactory.json";
@@ -93,8 +93,14 @@ export interface UserInfo{
     exists: boolean
 }
 
+
+interface ExtendedLog extends Log {
+    valid?: boolean;
+    userIndex?: number;
+}
+
 export class ZkTeamClientAdmin extends ZkTeamClient {
-  
+    
   private getUserKey(userIndex: number): HDNode {
     return this.key.derivePath(`m/${this.index}/${userIndex}'`);
   }
@@ -123,7 +129,11 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
     const users = Array.from({ length: limit }, (v, k) =>
          this.getUser(page * limit + k)
     );
-    return Promise.all(users);
+    return Promise.all(users).then(function(users){
+        return users.filter(function(user){
+            return user.exists;
+        })
+    });
   }
 
   public async generateInputs(userIndex: number, newAllowance: bigint) {
@@ -144,6 +154,11 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
   }
 
   public async setAllowance(userIndex: number, allowance: bigint) {
+    if (userIndex !== 0){
+        if ((await this.getAllowance(userIndex-1)) == null){
+            throw new Error("Allowance for a lower user index has not been set");
+        } 
+    }  
     const inputs = await this.generateInputs(userIndex, allowance);
     return this.createSignedUserOp({
       ...inputs,
@@ -151,35 +166,51 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
       data: "0x",
     });
   }
-
-  public async checkIntegrity(userIndexLimit: number) {
-    for (let userIndex = 0; userIndex <= userIndexLimit; userIndex++) {
-      const userKey = this.getUserKey(userIndex);
-      const index = await this.getLastIndex(userKey);
-      if (index == 0) continue;
-      for (let i = 1; i <= index; i++) {
-        const oldTriplet = ZkTeamClientAdmin.generateTriplet(userKey, i - 1);
-        const currentTriplet = ZkTeamClientAdmin.generateTriplet(userKey, i);
-        const nullifierHash = ZkTeamClientAdmin.getNullifierHash(oldTriplet.n);
-        const log = this.data.nullifierHashes[nullifierHash.toString()];
-        if (!log.verified && !log.discarded) {
-          const allowance = decryptAllowance(
-            log.encryptedAllowance,
-            oldTriplet.k,
-            oldTriplet.i
-          );
-          const commitmentHash = ZkTeamClientAdmin.getCommitmentHash(
-            currentTriplet.n,
-            currentTriplet.s,
-            allowance
-          );
-          if (commitmentHash === log.commitmentHash) log.verified = true;
-        }
+  
+  private async tagLogs(){
+      await this.getData();
+      let userIndex = 0;
+      while((await this.getAllowance(userIndex)) !== null){
+          const userKey = this.getUserKey(userIndex);
+          const index = await this.getLastIndex(userKey);
+          if (index == 0) continue;
+          for (let i = 1; i <= index; i++) {
+              const oldTriplet = ZkTeamClientAdmin.generateTriplet(userKey, i - 1);
+              const currentTriplet = ZkTeamClientAdmin.generateTriplet(userKey, i);
+              const nullifierHash = ZkTeamClientAdmin.getNullifierHash(oldTriplet.n);
+              const log = this.data.nullifierHashes[nullifierHash.toString()] as ExtendedLog;
+              if (!('userIndex' in log)) log.userIndex = userIndex;
+              if (!('valid' in log)){
+                  const allowance = decryptAllowance(
+                    log.encryptedAllowance,
+                    oldTriplet.k,
+                    oldTriplet.i
+                  );
+                  const commitmentHash = ZkTeamClientAdmin.getCommitmentHash(
+                    currentTriplet.n,
+                    currentTriplet.s,
+                    allowance
+                  );
+                  log.valid = (commitmentHash === log.commitmentHash);
+              }
+          }
+          userIndex++;
       }
-    }
+  }
+
+  public async getTransactions(page: number, limit: number){
+      await this.tagLogs();
+      return this.data.logs.slice().reverse().filter(function(log){
+          return ('userIndex' in log);
+      }).slice(page * limit, (page + 1) * limit);
+  }
+
+  public async checkIntegrity() {
+    await this.tagLogs();
     return Object.values(this.data.nullifierHashes).reduce(function (acc, log) {
-      if (!log.verified && !log.discarded) acc.push(log.commitmentHash);
-      return acc;
+        const extendedLog = log as ExtendedLog;
+        if (!extendedLog.valid && !extendedLog.discarded) acc.push(extendedLog.commitmentHash);
+        return acc;
     }, [] as bigint[]);
   }
 }
@@ -228,5 +259,24 @@ export class ZkTeamClientUser extends ZkTeamClient {
       target,
       data,
     });
+  }
+  
+  private getNullifierHash(index: number){
+      let nullifier = BigNumber.from(
+                        this.key.derivePath(`${index}/1`).privateKey
+                      ).toBigInt();
+      return ZkTeamCore.getNullifierHash(nullifier);
+  }
+  
+  public async getTransactions(page: number, limit: number){
+      let index = (await this.getLastIndex(this.key));
+      let results = [];
+      let i = index - (page * limit);
+      while(--i>=0 && results.length<limit){
+          const nullifierHash = this.getNullifierHash(i);
+          const log = this.data.nullifierHashes[nullifierHash.toString()] as ExtendedLog;
+          results.push(log);
+      }
+      return results;
   }
 }

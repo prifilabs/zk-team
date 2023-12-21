@@ -123,7 +123,8 @@ export async function processOp(account, op, config) {
   }
   console.log(`\tUserOperation hash: ${uoHash}`);
   const txHash = await account.getUserOpReceipt(uoHash);
-  return processTx(txHash);
+  await processTx(txHash);
+  return txHash;
 }
 
 describe("ZkTeam Core", function () {

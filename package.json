@@ -1,6 +1,6 @@
 {
     "name": "@prifilabs/zk-team",
-    "version": "1.0.4",
+    "version": "1.1.0",
     "description": "Privacy-Preserving Account-Abstraction for Teams",
     "main": "dist/src/ZkTeamClient.js",
     "scripts": {

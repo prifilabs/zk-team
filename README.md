@@ -96,7 +96,7 @@ const adminInstance = new ZkTeamClientAdmin({
 });
 ```
 
-Using this account instance, the admin can gather information about user's and allowances.  Here is an example of getting information about the first 5 users of account #0 (`page=0` and `limit=5`):
+Using this account instance, the admin can gather information about user's and allowances.  Here is an example of getting information about the first 5 users (`page=0` and `limit=5`):
 
 ```
 const users = await adminInstance.getUsers(0, 5);
@@ -109,6 +109,15 @@ Or get information about a single user (user #0 here):
 
 ```
 const { index, allowance, exists, key } = await adminInstance.getUser(0);
+````
+
+The admin can also get the latest transactions made from this account. Here is an example of getting the 5 most recent transactions (`page=0` and `limit=5`):
+
+```
+const transactions = await adminInstance.getTransactions(0, 5);
+for (let { transactionHash, userIndex } of transactions){
+     console.log(`\t txHash ${transactionHash} made by user ${userIndex}`);
+}
 ````
 
 The admin can set the allowance for a user. The method `setAllowance` returns a user operation that has not been sent to the bundler yet:
@@ -149,6 +158,15 @@ Users can check the allowance that has been allocated to them by the admin:
 const allowance = await userInstance.getAllowance();
 ```
 
+Users can get the most recent transactions they made with this account (`page=0` and `limit=5`):
+
+```
+const transactions = await userInstance.getTransactions(0, 5);
+for (let { transactionHash } of transactions){
+     console.log(`\t txHash ${transactionHash}`);
+}
+````
+
 And they can spend their allowance by sending transactions. As an example, the user calls the method `setGreeting` of a greeter contract and pays 0,001 Eth. The method `setTransaction` returns a user operation that has not been sent to the bundler yet: 
 
 ```
@@ -176,9 +194,8 @@ Once the user operation has been executed, the user's allowance is decremented a
 
 The admin can check whether all users are using their allowance correctly. To do so, the admin can check whether all transactions are valid. The method `checkIntegrity` returns all commitmentHash that are incorrect:
 
-Here is an example for checking the integrity on account #2: 
 ```
-const detectedAnomalies = await adminInstance.checkIntegrity(2);
+const detectedAnomalies = await adminInstance.checkIntegrity();
 ```
 
 If any incorrect commitment hash has been detected, the admin can cancel those commitment hash preventing users from using them. The method `discardCommitmentHashes` discard all commitment hashes given as inputs. 

@@ -113,7 +113,11 @@ class ZkTeamClientAdmin extends ZkTeamClient {
     getUsers(page, limit) {
         return __awaiter(this, void 0, void 0, function* () {
             const users = Array.from({ length: limit }, (v, k) => this.getUser(page * limit + k));
-            return Promise.all(users);
+            return Promise.all(users).then(function (users) {
+                return users.filter(function (user) {
+                    return user.exists;
+                });
+            });
         });
     }
     generateInputs(userIndex, newAllowance) {
@@ -136,13 +140,20 @@ class ZkTeamClientAdmin extends ZkTeamClient {
     }
     setAllowance(userIndex, allowance) {
         return __awaiter(this, void 0, void 0, function* () {
+            if (userIndex !== 0) {
+                if ((yield this.getAllowance(userIndex - 1)) == null) {
+                    throw new Error("Allowance for a lower user index has not been set");
+                }
+            }
             const inputs = yield this.generateInputs(userIndex, allowance);
             return this.createSignedUserOp(Object.assign(Object.assign({}, inputs), { target: yield this.getAccountAddress(), data: "0x" }));
         });
     }
-    checkIntegrity(userIndexLimit) {
+    tagLogs() {
         return __awaiter(this, void 0, void 0, function* () {
-            for (let userIndex = 0; userIndex <= userIndexLimit; userIndex++) {
+            yield this.getData();
+            let userIndex = 0;
+            while ((yield this.getAllowance(userIndex)) !== null) {
                 const userKey = this.getUserKey(userIndex);
                 const index = yield this.getLastIndex(userKey);
                 if (index == 0)
@@ -152,17 +163,33 @@ class ZkTeamClientAdmin extends ZkTeamClient {
                     const currentTriplet = ZkTeamClientAdmin.generateTriplet(userKey, i);
                     const nullifierHash = ZkTeamClientAdmin.getNullifierHash(oldTriplet.n);
                     const log = this.data.nullifierHashes[nullifierHash.toString()];
-                    if (!log.verified && !log.discarded) {
+                    if (!('userIndex' in log))
+                        log.userIndex = userIndex;
+                    if (!('valid' in log)) {
                         const allowance = (0, encryption_1.decryptAllowance)(log.encryptedAllowance, oldTriplet.k, oldTriplet.i);
                         const commitmentHash = ZkTeamClientAdmin.getCommitmentHash(currentTriplet.n, currentTriplet.s, allowance);
-                        if (commitmentHash === log.commitmentHash)
-                            log.verified = true;
+                        log.valid = (commitmentHash === log.commitmentHash);
                     }
                 }
+                userIndex++;
             }
+        });
+    }
+    getTransactions(page, limit) {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.tagLogs();
+            return this.data.logs.slice().reverse().filter(function (log) {
+                return ('userIndex' in log);
+            }).slice(page * limit, (page + 1) * limit);
+        });
+    }
+    checkIntegrity() {
+        return __awaiter(this, void 0, void 0, function* () {
+            yield this.tagLogs();
             return Object.values(this.data.nullifierHashes).reduce(function (acc, log) {
-                if (!log.verified && !log.discarded)
-                    acc.push(log.commitmentHash);
+                const extendedLog = log;
+                if (!extendedLog.valid && !extendedLog.discarded)
+                    acc.push(extendedLog.commitmentHash);
                 return acc;
             }, []);
         });
@@ -211,6 +238,23 @@ class ZkTeamClientUser extends ZkTeamClient {
             const inputs = yield this.generateInputs(value);
             return this.createProvedUserOp(Object.assign(Object.assign({}, inputs), { target,
                 data }));
+        });
+    }
+    getNullifierHash(index) {
+        let nullifier = ethers_1.BigNumber.from(this.key.derivePath(`${index}/1`).privateKey).toBigInt();
+        return ZkTeamCore_1.ZkTeamCore.getNullifierHash(nullifier);
+    }
+    getTransactions(page, limit) {
+        return __awaiter(this, void 0, void 0, function* () {
+            let index = (yield this.getLastIndex(this.key));
+            let results = [];
+            let i = index - (page * limit);
+            while (--i >= 0 && results.length < limit) {
+                const nullifierHash = this.getNullifierHash(i);
+                const log = this.data.nullifierHashes[nullifierHash.toString()];
+                results.push(log);
+            }
+            return results;
         });
     }
 }

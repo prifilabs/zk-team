@@ -118,8 +118,8 @@ export interface Log {
   encryptedAllowance: string;
   commitmentHash: bigint;
   nullifierHash: bigint;
+  transactionHash: string;
   discarded?: boolean;
-  verified?: boolean;
 }
 
 export class ZkTeamCore extends BaseAccountAPI {
@@ -191,6 +191,7 @@ export class ZkTeamCore extends BaseAccountAPI {
             encryptedAllowance,
             commitmentHash,
             nullifierHash,
+            transactionHash: event.transactionHash
           };
           data.logs.push(log);
           data.commitmentHashes[commitmentHash] = log;
@@ -443,7 +444,7 @@ export class ZkTeamCore extends BaseAccountAPI {
     let userOp = await this.createUnsignedUserOp({ ...info });
 
     const callData = await userOp.callData;
-    // interstingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
+    // interestingly we cannot just use the keccak hash value. It makes the proof crash. We must hash it using poseidon.
     const callDataHash = poseidon1([
       BigNumber.from(keccak256(callData)).toBigInt(),
     ]);

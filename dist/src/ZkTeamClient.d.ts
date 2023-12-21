@@ -1,6 +1,6 @@
 import { Provider } from "@ethersproject/providers";
 import { HDNode } from "ethers/lib/utils";
-import { ZkTeamCore, ZkTeamCoreParams } from "./ZkTeamCore";
+import { ZkTeamCore, ZkTeamCoreParams, Log } from "./ZkTeamCore";
 export interface AccountInfo {
     index: number;
     balance: bigint;
@@ -29,6 +29,10 @@ export interface UserInfo {
     allowance: bigint;
     exists: boolean;
 }
+interface ExtendedLog extends Log {
+    valid?: boolean;
+    userIndex?: number;
+}
 export declare class ZkTeamClientAdmin extends ZkTeamClient {
     private getUserKey;
     getAllowance(userIndex: number): Promise<bigint | null>;
@@ -42,7 +46,9 @@ export declare class ZkTeamClientAdmin extends ZkTeamClient {
         encryptedAllowance: string;
     }>;
     setAllowance(userIndex: number, allowance: bigint): Promise<import("@account-abstraction/contracts").UserOperationStruct>;
-    checkIntegrity(userIndexLimit: number): Promise<bigint[]>;
+    private tagLogs;
+    getTransactions(page: number, limit: number): Promise<Log[]>;
+    checkIntegrity(): Promise<bigint[]>;
 }
 export declare class ZkTeamClientUser extends ZkTeamClient {
     getKey(): string;
@@ -80,5 +86,7 @@ export declare class ZkTeamClientUser extends ZkTeamClient {
         maxPriorityFeePerGas: import("@account-abstraction/contracts/dist/types/common").PromiseOrValue<import("ethers").BigNumberish>;
         paymasterAndData: import("@account-abstraction/contracts/dist/types/common").PromiseOrValue<import("ethers").BytesLike>;
     }>;
+    private getNullifierHash;
+    getTransactions(page: number, limit: number): Promise<ExtendedLog[]>;
 }
 export {};
