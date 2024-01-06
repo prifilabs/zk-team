@@ -75,7 +75,7 @@ export async function setAccount(deployer, signer, index, config) {
     deployer,
     accountAddress,
     ethers.utils.parseEther("0.1"),
-    ethers.utils.parseEther("0.2"),
+    ethers.utils.parseEther("0.5"),
     ethers.provider
   );
   const accountBalance = await ethers.provider.getBalance(accountAddress);

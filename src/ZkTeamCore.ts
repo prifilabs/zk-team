@@ -463,13 +463,6 @@ export class ZkTeamCore extends BaseAccountAPI {
       newTreePathIndices: info.newTreePathIndices,
       callDataHash,
     };
-
-    const outputs = {
-      oldNullifierHash: info.oldNullifierHash,
-      oldRoot: info.oldRoot,
-      newCommitmentHash: info.newCommitmentHash,
-      newRoot: info.newRoot,
-    };
     
     const { proof, publicSignals } = await groth16.fullProve(inputs, wasmFile, zkeyFile);
 

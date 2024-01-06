@@ -74,7 +74,6 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     function initialize(address anOwner) public virtual initializer {
         owner = anOwner;
         tree.init(_depth, _rootHistorySize);
-        // tree.insert(42); // Bug: I have no clue why it does not work without this first insert
         emit ZkTeamInit(_entryPoint, owner);
     }
     
@@ -113,7 +112,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     }
     
     function _onlyOwner() internal view {
-         //directly from EOA owner, or through the account itself (which gets redirected through execute())
+         // directly from EOA owner, or through the account itself (which gets redirected through execute())
          require(msg.sender == owner || msg.sender == address(this), "only owner");
      }
     

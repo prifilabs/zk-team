@@ -1,5 +1,6 @@
 pragma circom 2.0.0;
 
+include "../node_modules/circomlib/circuits/comparators.circom";
 include "../node_modules/circomlib/circuits/poseidon.circom";
 include "./tree.circom";
 
@@ -60,7 +61,6 @@ template Transact(levels) {
     oldRoot <== oldInputHasher.root;
     
     // private new input values
-    
     signal input newAllowance;
     signal input newNullifier;
     signal input newSecret;
@@ -77,14 +77,18 @@ template Transact(levels) {
     newCommitmentHash <== newInputHasher.commitmentHash;    
     newRoot <== newInputHasher.root; 
     
-    // asserts
+    // check allowance
+    signal valueIsGreaterThanAllowance;
     
-    assert(value >= 0);
-    assert(oldAllowance >= value);
-    assert(newAllowance == oldAllowance - value);          
+    component greaterEqThan = GreaterEqThan(64); 
+    greaterEqThan.in[0] <== oldAllowance;
+    greaterEqThan.in[1] <== value;
+    valueIsGreaterThanAllowance <-- greaterEqThan.out;
+    valueIsGreaterThanAllowance === 1;
+    
+    newAllowance === oldAllowance - value;          
     
     // hidden signals to prevent tampering
-    
     signal callDataHashSquared;
     callDataHashSquared <== callDataHash * callDataHash;
 }

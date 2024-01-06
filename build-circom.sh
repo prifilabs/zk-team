@@ -1,6 +1,6 @@
 #!/bin/bash
 
-rm contracts/verifier.sol
+rm contracts/ZkTeamVerifier.sol
 rm -Rf ptau-data
 mkdir ptau-data
 

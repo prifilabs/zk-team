@@ -11,15 +11,15 @@
     "hash": "66bbcf17b7fea5998ae7e89d16546bf15ac6ca6af280e77287a251f31bffb502"
   },
   "verifier": {
-    "address": "0xF780B83Fa3cF24C5C5Cc77266bF6FF34F3D3Ccd7",
-    "hash": "ee82b07f629cfccc738cbd57fce789128ed675fdce9a0925aa7224f065863005"
+    "address": "0x1D9d5cCf5dED93290257a36D5223606a1D445142",
+    "hash": "11932598b9781399589e4688a3460bc9139765f4f6369d5e988217db74f9efd6"
   },
   "merkle": {
     "address": "0x7012119C0303e26d2Af5400B3dFFccE7DaC7cEd5",
     "hash": "5c10d8a79a4d9b32cafd33e0b39e3123b0f8a17ad5ff17f4cb8c4082aad94ad4"
   },
   "factory": {
-    "address": "0x293Bc420a74A9Cc13D6462930Bfd5dfa530b2438",
-    "hash": "af70e89ac55ddd205c0638bcddde20b52e639bb2255c459c634ecd41585aec5e"
+    "address": "0x62049CC349Cc5Db8C545d6d31b64244A878693Cf",
+    "hash": "f41ac5af123a6fcfc7ec8df1310164c2ee0deb0e9cddb643347fd3e640e87d66"
   }
 }

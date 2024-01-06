@@ -338,12 +338,6 @@ class ZkTeamCore extends sdk_1.BaseAccountAPI {
                 newTreePathIndices: info.newTreePathIndices,
                 callDataHash,
             };
-            const outputs = {
-                oldNullifierHash: info.oldNullifierHash,
-                oldRoot: info.oldRoot,
-                newCommitmentHash: info.newCommitmentHash,
-                newRoot: info.newRoot,
-            };
             const { proof, publicSignals } = yield snarkjs_1.groth16.fullProve(inputs, wasmFile, zkeyFile);
             let res = yield snarkjs_1.groth16.verify(verification_key_json_1.default, publicSignals, proof);
             if (!res)
