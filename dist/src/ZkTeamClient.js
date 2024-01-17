@@ -112,12 +112,7 @@ class ZkTeamClientAdmin extends ZkTeamClient {
     }
     getUsers(page, limit) {
         return __awaiter(this, void 0, void 0, function* () {
-            const users = Array.from({ length: limit }, (v, k) => this.getUser(page * limit + k));
-            return Promise.all(users).then(function (users) {
-                return users.filter(function (user) {
-                    return user.exists;
-                });
-            });
+            return Promise.all(Array.from({ length: limit }, (v, k) => this.getUser(page * limit + k)));
         });
     }
     generateInputs(userIndex, newAllowance) {
@@ -140,11 +135,6 @@ class ZkTeamClientAdmin extends ZkTeamClient {
     }
     setAllowance(userIndex, allowance) {
         return __awaiter(this, void 0, void 0, function* () {
-            if (userIndex !== 0) {
-                if ((yield this.getAllowance(userIndex - 1)) == null) {
-                    throw new Error("Allowance for a lower user index has not been set");
-                }
-            }
             const inputs = yield this.generateInputs(userIndex, allowance);
             return this.createSignedUserOp(Object.assign(Object.assign({}, inputs), { target: yield this.getAccountAddress(), data: "0x" }));
         });

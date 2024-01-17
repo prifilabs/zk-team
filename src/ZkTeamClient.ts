@@ -126,14 +126,9 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
   }
 
   public async getUsers(page: number, limit: number): Promise<Array<UserInfo>>{
-    const users = Array.from({ length: limit }, (v, k) =>
+    return Promise.all(Array.from({ length: limit }, (v, k) =>
          this.getUser(page * limit + k)
-    );
-    return Promise.all(users).then(function(users){
-        return users.filter(function(user){
-            return user.exists;
-        })
-    });
+    ));
   }
 
   public async generateInputs(userIndex: number, newAllowance: bigint) {
@@ -154,11 +149,6 @@ export class ZkTeamClientAdmin extends ZkTeamClient {
   }
 
   public async setAllowance(userIndex: number, allowance: bigint) {
-    if (userIndex !== 0){
-        if ((await this.getAllowance(userIndex-1)) == null){
-            throw new Error("Allowance for a lower user index has not been set");
-        } 
-    }  
     const inputs = await this.generateInputs(userIndex, allowance);
     return this.createSignedUserOp({
       ...inputs,

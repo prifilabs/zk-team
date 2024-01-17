@@ -146,7 +146,7 @@ describe("ZkTeam Client", function () {
 
   it("Should allow the admin to get info for multiple users", async function () {
     const users = await adminInstance.getUsers(0, 5);
-    expect(users).to.have.lengthOf(1);
+    expect(users).to.have.lengthOf(5);
   });
   
   it("Should allow the admin to get most recent transactions", async function () {
