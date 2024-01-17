@@ -47,7 +47,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
     uint256 private immutable _rootHistorySize = 5;
 
     event ZkTeamDiscard(uint256 commitmentHash);
-    event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash, bytes32 encryptedAllowance);
+    event ZkTeamExecution(uint256 nullifierHash, uint256 commitmentHash, uint256 value, bytes32 encryptedAllowance, address dest);
     event ZkTeamInit(IEntryPoint indexed entryPoint, address indexed owner);
 
 
@@ -128,7 +128,7 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
         _onlyEntryPointOrOwner();
         nullifierHashes[nullifierHash] = encryptedAllowance;
         tree.insert(commitmentHash);
-        emit ZkTeamExecution(nullifierHash, commitmentHash, encryptedAllowance);
+        emit ZkTeamExecution(nullifierHash, commitmentHash, value, encryptedAllowance, dest);
         (bool success, bytes memory result) = dest.call{value : value}(data);
         if (!success) {
             assembly {
@@ -143,6 +143,12 @@ contract ZkTeamAccount is BaseAccount, TokenCallbackHandler, UUPSUpgradeable, In
             tree.update(commitmentHashList[i].commitmentHash, 0, commitmentHashList[i].treeSiblings, commitmentHashList[i].treePathIndices);
             emit ZkTeamDiscard(commitmentHashList[i].commitmentHash);
         }
+    }
+    
+    function withdraw(address payable withdrawAddress, uint256 amount) public {
+        _onlyOwner();
+        (bool success, ) = withdrawAddress.call{value: amount}("");
+        require(success, "Transfer failed");
     }
 
     /**

@@ -97,13 +97,15 @@ class ZkTeamCore extends sdk_1.BaseAccountAPI {
                     const executionEvents = yield accountContract.queryFilter("ZkTeamExecution", data.blockIndex, latest.number);
                     for (let event of executionEvents) {
                         if (event.args) {
-                            let [nullifierHash, commitmentHash, encryptedAllowance] = event.args;
+                            let [nullifierHash, commitmentHash, value, encryptedAllowance, dest] = event.args;
                             nullifierHash = ethers_1.BigNumber.from(nullifierHash).toBigInt();
                             commitmentHash = ethers_1.BigNumber.from(commitmentHash).toBigInt();
                             const log = {
                                 encryptedAllowance,
                                 commitmentHash,
+                                value,
                                 nullifierHash,
+                                dest,
                                 transactionHash: event.transactionHash
                             };
                             data.logs.push(log);

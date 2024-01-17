@@ -118,7 +118,9 @@ export interface Log {
   encryptedAllowance: string;
   commitmentHash: bigint;
   nullifierHash: bigint;
+  value: bigint;
   transactionHash: string;
+  dest: string;
   discarded?: boolean;
 }
 
@@ -184,13 +186,15 @@ export class ZkTeamCore extends BaseAccountAPI {
       );
       for (let event of executionEvents) {
         if (event.args) {
-          let [nullifierHash, commitmentHash, encryptedAllowance] = event.args;
+          let [nullifierHash, commitmentHash, value, encryptedAllowance, dest] = event.args;
           nullifierHash = BigNumber.from(nullifierHash).toBigInt();
           commitmentHash = BigNumber.from(commitmentHash).toBigInt();
           const log: Log = {
             encryptedAllowance,
             commitmentHash,
+            value,
             nullifierHash,
+            dest,
             transactionHash: event.transactionHash
           };
           data.logs.push(log);

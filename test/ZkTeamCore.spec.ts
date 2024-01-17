@@ -306,7 +306,7 @@ describe("ZkTeam Core", function () {
   //     }
   // })
 
-  it("Should allow the admin to cancel the user's allowance ", async function () {
+  it("Should allow the admin to cancel the user's allowance", async function () {
     const commitmentHashes = await adminInstance.getCommitmentHashes();
     const txHashes = await adminInstance.discardCommitmentHashes(
       commitmentHashes.slice(-1)
@@ -317,4 +317,11 @@ describe("ZkTeam Core", function () {
       })
     );
   });
+  
+  it("Should allow the admin to withdraw funds", async function () {
+    const balance = await ethers.provider.getBalance(await adminInstance.getAccountAddress());
+    const contract = await adminInstance.getAccountContract();
+    const tx = await contract.connect(admin).withdraw(admin.address, balance);
+    return processTx(tx.hash);
+  }); 
 });

@@ -39,9 +39,10 @@ function decryptData(salt, password, data) {
 
 export async function printUserOperation(op){
     const data = await utils.resolveProperties(op);
-    ['nonce', 'callGasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'verificationGasLimit'].map(function(key){
-        data[key] = data[key].toHexString();
+    ['nonce', 'callGasLimit', 'maxFeePerGas', 'maxPriorityFeePerGas', 'verificationGasLimit', 'preVerificationGas'].map(function(key){
+        data[key] = data[key].toString();
     })
+    console.log('User Operation sent to the bundler:');
     console.log(JSON.stringify(data, null, 2))
 }
 
@@ -159,7 +160,7 @@ async function setConfig(config) {
               type: 'text',
               name: 'providerKey',
               message: 'Enter the provider API key',
-            initial: ('provider' in config)? config.provider.key : '',
+              initial: ('provider' in config)? config.provider.key : '',
               onRender(k) {
                 if (this.done) { this.rendered = ''; }
             }   
@@ -238,7 +239,14 @@ export async function setUserConfig() {
             name: 'privkey',
             message: 'Enter your ZK Team private key',
             initial: ('user' in config)? config.user.privkey : '',
-            validate: (value) => utils.isHexString(value, 32),
+            validate: function(value){
+                try{
+                    new utils.HDNode.fromExtendedKey(value);
+                    return true;
+                } catch (err){
+                    return 'Invalid private key';
+                }
+            },
             onRender(k) {
                 if (this.done) { this.rendered = ''; }
             }    

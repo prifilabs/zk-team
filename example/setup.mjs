@@ -8,8 +8,6 @@ import dotenv from 'dotenv'
 dotenv.config({path: join('..', '.env')});
 
 export const network = "sepolia";
-export const chainId = 11155111;
-
 export const config = sepoliaConfig;
 
 export const provider = new ethers.providers.InfuraProvider(network, process.env.INFURA_API_KEY)
@@ -17,5 +15,5 @@ export const provider = new ethers.providers.InfuraProvider(network, process.env
 export const client = new HttpRpcClient(
   config.bundler.url,
   config.entrypoint.address,
-  chainId
+  config.chainId
 );

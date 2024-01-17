@@ -71,7 +71,9 @@ export interface Log {
     encryptedAllowance: string;
     commitmentHash: bigint;
     nullifierHash: bigint;
+    value: bigint;
     transactionHash: string;
+    dest: string;
     discarded?: boolean;
 }
 export declare class ZkTeamCore extends BaseAccountAPI {
