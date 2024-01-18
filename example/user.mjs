@@ -38,4 +38,5 @@ console.log(`Transaction hash: ${txHash}`);
 const tx = await provider.getTransaction(txHash);
 const receipt = await tx.wait();
 const gasCost = receipt.gasUsed.mul(receipt.effectiveGasPrice);
-console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} eth)`);
+console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} ETH)`);
+process.exit(0);

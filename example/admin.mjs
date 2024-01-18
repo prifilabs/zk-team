@@ -6,7 +6,7 @@ import { ZkTeamClientAdmin, getAccounts, getAccount }from "@prifilabs/zk-team";
 
 import { config, provider , client } from "./setup.mjs";
 
-const accountIndex = 3;
+const accountIndex = 0;
 
 let mnemonicFile = "admin.txt";
 let mnemonic;
@@ -70,10 +70,10 @@ console.log(`Transaction hash: ${txHash}`);
 const tx = await provider.getTransaction(txHash);
 const receipt = await tx.wait();
 const gasCost = receipt.gasUsed.mul(receipt.effectiveGasPrice);
-console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} eth)`);
+console.log(`Gas cost: ${gasCost} (${ethers.utils.formatEther(gasCost)} ETH)`);
 
 const user0 = await adminInstance.getUser(0);
 console.log(`User #${user0.index}: exists:${user0.exists}, allowance:${user0.allowance}, key:${user0.key}`);
 
-// share the accoutn address and the user's key with the user
+// share the account address and the user's key with the user
 writeFileSync("user.txt", JSON.stringify({ address: account.address, key: user0.key }, null, 2), "utf-8");
